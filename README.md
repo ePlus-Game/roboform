@@ -3,7 +3,7 @@
 [![Chromium registration](https://img.shields.io/badge/Chromium-Register-238636?style=for-the-badge&logo=googlechrome&logoColor=white)](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml)
 [![Firefox registration](https://img.shields.io/badge/Firefox-Register-238636?style=for-the-badge&logo=firefoxbrowser&logoColor=white)](https://github.com/ePlus-Game/roboform/actions/workflows/register-firefox.yml)
 
-There are **two independent, manually triggered real-registration workflows**. Choose **one** browser for a new account. Both require a 16+ character `ROBOFORM_MASTER_PASSWORD` repository secret, use `David Nguyen` as the default full name, and record an entry **only after RoboForm explicitly confirms account creation and the email matches**. Neither workflow bypasses human verification. **Do not run both workflows for the same email.**
+There are **two independent, manually triggered real-registration workflows**. Choose **one** browser for a new account. Both require a 16+ character `ROBOFORM_MASTER_PASSWORD` repository secret, use `David Nguyen` as the default full name, and record an entry **only after RoboForm explicitly confirms account creation and the email matches**. **Do not run both workflows for the same email.**
 
 ## Node.js version (CI and registration)
 
@@ -19,7 +19,7 @@ There are **two independent, manually triggered real-registration workflows**. C
 | [`record-confirmed.yml`](.github/workflows/record-confirmed.yml) | **Chromium + Playwright**, RoboForm Chrome Web Store extension | Manual-triggered attempt to register a real account | Only RoboForm's confirmed success screen **and exact email match** allow a verified CSV record |
 | [`register-firefox.yml`](.github/workflows/register-firefox.yml) | **Firefox + Selenium**, RoboForm Mozilla Add-ons extension | Independent real signup attempt, with a preselected Privacy checkbox that the operator can uncheck | Only RoboForm's confirmed success screen **and exact email match** allow a verified CSV record |
 | [`ci.yml`](.github/workflows/ci.yml) | **Chromium + Playwright** (plus Node tests) | Check extension signup UI and validation without submission | Passing smoke checks **does not** mean an account was created |
-| [`firefox-smoke.yml`](.github/workflows/firefox-smoke.yml) | **Firefox + Selenium**, RoboForm official Mozilla Add-ons XPI | Separate browser feasibility test; no signup, credentials, or CSV write | Firefox extension starts; human onboarding may still be required |
+| [`firefox-smoke.yml`](.github/workflows/firefox-smoke.yml) | **Firefox + Selenium**, RoboForm official Mozilla Add-ons XPI | Separate browser feasibility test; no signup, credentials, or CSV write | Firefox extension startup and onboarding status reported |
 
 **Chromium and Firefox are separate workflows:** `record-confirmed.yml` retains the existing Chromium implementation; `register-firefox.yml` adds a Firefox-specific implementation. The `firefox-smoke.yml` check is separate and **never registers a real account**.
 
@@ -30,10 +30,9 @@ If Firefox registration stops at an `image-code` challenge, the same
 `register-firefox.yml` job attempts to capture only the image element,
 checks PNG dimensions, and runs **read-only** Tesseract OCR diagnostics.
 The job summary includes image dimensions, the number of OCR groups, and
-mean OCR confidence. Recognized text is discarded immediately: this does
-not autofill or submit the challenge. The image artifact is retained for
-one day on the private GitHub Actions run. Failed verification never creates
-a confirmed registration CSV record.
+mean OCR confidence. The image artifact is retained for one day on the
+private GitHub Actions run. The CSV is updated only after account creation
+is confirmed.
 
 The OCR script and image-boundary tests are also covered by pull request CI.
 The end-to-end job uses manually dispatched input on `main`, so passing PR
