@@ -12,6 +12,23 @@ There are **two independent, manually triggered real-registration workflows**. C
 - The workflows use `actions/checkout@v7` and `actions/setup-python@v7` to avoid the deprecated Node.js 20 runtime in previous action versions. These actions' internal runtime is separate from the Node.js version used to execute project scripts.
 - On a development machine, run `nvm use` (or install Node.js 26 LTS) and `npm test`. The `package.json` engine range excludes prerelease Node 27.
 
+## Local interactive Firefox verification
+
+When RoboForm shows an image-code challenge, a **GitHub-hosted Actions runner cannot accept keyboard input into the Firefox UI**. Use this opt-in mode on a computer with a visible desktop session instead.
+
+Prerequisites: Firefox, Python 3.12+ and Node.js 26 available on your computer. From the repository root, run:
+
+```powershell
+python -m pip install "selenium>=4.30,<5"
+python scripts/register-firefox.py --interactive
+```
+
+The command asks for Privacy consent, signup email and Master Password (entered without echoing it). The name defaults to `David Nguyen`; set `REGISTRATION_FULL_NAME` if needed. It downloads the signed official Firefox add-on into a temporary browser profile, fills the signup fields, then leaves a **visible Firefox window** open. In that window, click **Create Account** and complete any verification yourself. When RoboForm displays **Account created successfully**, return to the terminal and press **Enter**.
+
+Selenium then checks that RoboForm's success screen displays the exact requested email. Only when both checks succeed does it append a record to `data/registrations.csv` **locally**. The command does **not** push the CSV to GitHub. If the screen is not verified, it records nothing. Keep the browser open until the terminal finishes; Ctrl+C cancels.
+
+The original `register-firefox.yml` GitHub Actions workflow remains headless and unchanged; it still stops if manual verification is required. Never put your Master Password in command-line arguments, the repository, or screenshots.
+
 ## Which browser is currently used?
 
 | Workflow | Browser / technology | Purpose | What success means |
