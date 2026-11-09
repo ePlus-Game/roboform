@@ -89,3 +89,9 @@ A hosted headless CI runner **cannot reliably complete an interactive challenge*
 The signup selectors were derived from user-provided RoboForm extension **v10.0.2.0**; live versions might have changed. For safety, no browser screenshots or traces containing credentials are uploaded. The repository and its logs should remain private.
 
 References: [RoboForm signup help](https://help.roboform.com/hc/en-us/articles/115005962708-RoboForm-Windows-Installation-and-setup) · [RoboForm OTP documentation](https://help.roboform.com/hc/en-us/articles/115005043767-How-to-enable-One-Time-Password-OTP-via-email-or-SMS) · [Playwright extensions](https://playwright.dev/docs/chrome-extensions) · [Selenium Firefox](https://www.selenium.dev/documentation/webdriver/browsers/firefox/) · [RoboForm on Mozilla Add-ons](https://addons.mozilla.org/en-US/firefox/addon/roboform/).
+
+## Standalone Tesseract OCR smoke test
+
+The optional [Tesseract OCR smoke workflow](.github/workflows/tesseract-ocr-smoke.yml) runs entirely in GitHub Actions and checks a **locally generated ordinary SVG text sample** with expected content `HELLO 2026`. It renders that SVG into PNG with CairoSVG, invokes Tesseract, and fails on any recognition mismatch. No third-party website, RoboForm account, secret, HAR, CAPTCHA sample, or actual registration is involved.
+
+This is a baseline test of the OCR toolchain only: passing does **not** demonstrate the ability to solve RoboForm's image-code human verification. The real signup workflows retain their existing safety checks and require manual completion of security challenges.
