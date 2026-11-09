@@ -26,8 +26,8 @@ try {
   await textFields.nth(1).fill('Smoke Tester');
   await textFields.nth(1).blur();
   await page.waitForTimeout(1500);
-  const { enabled, requiresHumanVerification } = await getSignupSubmissionGate(page);
-  if (requiresHumanVerification && !enabled) {
+  const { enabled, verificationRequired } = await getSignupSubmissionGate(page);
+  if (verificationRequired && !enabled) {
     console.log('SMOKE_PASS: RoboForm signup UI loaded; Create Account verification pending.');
   } else if (enabled) {
     console.log('SMOKE_PASS: RoboForm signup UI loaded; Create Account is enabled with synthetic data. No submission was attempted.');
