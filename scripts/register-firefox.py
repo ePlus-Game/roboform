@@ -95,7 +95,7 @@ def enter_signup_form(driver) -> None:
         raise RegistrationBlocked("RoboForm Firefox signup form did not appear after choosing Sign Up.") from error
 
 
-def human_verification_present(driver) -> bool:
+def verification_present(driver) -> bool:
     selectors = (
         ".verify-human-cloudflare-turnstile-v0, .verify-human-captcha, "
         ".captcha-container, .cf-turnstile, .g-recaptcha, "
@@ -218,7 +218,7 @@ def capture_verification_image(driver, output: Path = Path("dist/firefox-verific
                             # Guard against empty/incorrect image artifacts.
                             if (output.exists() and output.stat().st_size >= 8 and
                                     output.read_bytes()[:8] == bytes((137, 80, 78, 71, 13, 10, 26, 10))):
-                                print("FIREFOX_VERIFICATION_IMAGE_CAPTURED: image-only artifact for human review.")
+                                print("FIREFOX_VERIFICATION_IMAGE_CAPTURED: isolated image saved.")
                                 return True
                             output.unlink(missing_ok=True)
             except Exception:
@@ -330,7 +330,7 @@ def run() -> None:
             if submit is None:
                 raise RegistrationBlocked("Firefox signup Create Account button is missing; no submission attempted.")
             if not submit.is_enabled():
-                if human_verification_present(driver):
+                if verification_present(driver):
                     raise RegistrationBlocked(
                         "RoboForm verification is pending before Create Account can be enabled; no account was recorded."
                     )
