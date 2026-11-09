@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=26" },
+  "engines": { "node": ">=26.0.0 <27" },
   "scripts": {
     "register": "node scripts/register.mjs",
     "smoke": "node scripts/smoke.mjs",
