@@ -6,7 +6,9 @@ Records only an exact email match on RoboForm's visible success screen.
 """
 from __future__ import annotations
 
+import argparse
 import csv
+import getpass
 import os
 from pathlib import Path
 import re
@@ -294,14 +296,28 @@ def await_confirmation(driver, email: str) -> None:
     )
 
 
-def run() -> None:
-    if os.getenv("FIREFOX_PRIVACY_CONSENT", "").lower() != "true":
+def run(*, interactive: bool = False) -> None:
+    if interactive and (os.getenv("GITHUB_ACTIONS", "").lower() == "true" or not sys.stdin.isatty()):
+        raise RegistrationBlocked(
+            "Manual verification requires a local interactive terminal and visible Firefox; "
+            "it is not available in headless GitHub Actions."
+        )
+    consent = os.getenv("FIREFOX_PRIVACY_CONSENT", "").lower()
+    if interactive and not consent:
+        response = input("Do you agree to the RoboForm Firefox Privacy terms? [yes/N]: ")
+        consent = "true" if response.strip().lower() == "yes" else "false"
+    if consent != "true":
         raise RegistrationBlocked(
             "Firefox Privacy consent is required. Review the agreement; keep the privacy_consent option checked if you agree."
         )
-    email = normalize_email(os.getenv("REGISTRATION_EMAIL", ""))
+    email_value = os.getenv("REGISTRATION_EMAIL", "")
+    if interactive and not email_value:
+        email_value = input("RoboForm signup email: ")
+    email = normalize_email(email_value)
     full_name = os.getenv("REGISTRATION_FULL_NAME", "David Nguyen").strip()
     password = os.getenv("ROBOFORM_MASTER_PASSWORD", "")
+    if interactive and not password:
+        password = getpass.getpass("RoboForm master password (hidden): ")
     if not 2 <= len(full_name) <= 80 or re.search(r'[\*?"<>|\\/]', full_name):
         raise RegistrationBlocked("Invalid full name.")
     if not password.strip() or len(password) < 16:
@@ -314,7 +330,8 @@ def run() -> None:
         if "start-page.html" not in files:
             raise RegistrationBlocked("Official RoboForm Firefox add-on does not have the expected start page.")
         opts = webdriver.FirefoxOptions()
-        opts.add_argument("-headless")
+        if not interactive:
+            opts.add_argument("-headless")
         if binary := os.getenv("FIREFOX_BINARY"):
             opts.binary_location = binary
         # System-access is limited to this fresh isolated runner and used solely
@@ -346,6 +363,17 @@ def run() -> None:
             text_fields[1].send_keys(full_name)
             text_fields[1].send_keys(Keys.TAB)
             time.sleep(2)
+            if interactive:
+                print(
+                    "FIREFOX_MANUAL_VERIFICATION_READY: Firefox is open with the signup form. "
+                    "Use that Firefox window to click Create Account and complete any verification "
+                    "yourself. Do not close the browser."
+                )
+                input("After RoboForm shows the account-created success screen, press Enter here to verify: ")
+                print("FIREFOX_MANUAL_VERIFICATION_CHECK: checking RoboForm success screen.")
+                await_confirmation(driver, email)
+                print("FIREFOX_SIGNUP_CONFIRMED: RoboForm success screen verified and registration recorded.")
+                return
             submit = find_submit_button(driver)
             if submit is None:
                 raise RegistrationBlocked("Firefox signup Create Account button is missing; no submission attempted.")
@@ -366,8 +394,17 @@ def run() -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="RoboForm Firefox registration.")
+    parser.add_argument(
+        "--interactive", action="store_true",
+        help="Open visible local Firefox for a human to complete verification and submit the signup."
+    )
+    arguments = parser.parse_args()
     try:
-        run()
+        run(interactive=arguments.interactive)
+    except (EOFError, KeyboardInterrupt):
+        print("REGISTRATION_NOT_CONFIRMED_FIREFOX: local interactive session cancelled.")
+        raise SystemExit(1) from None
     except RegistrationBlocked as error:
         print("REGISTRATION_NOT_CONFIRMED_FIREFOX:", str(error))
         raise SystemExit(1) from None
