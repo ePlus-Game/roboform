@@ -87,7 +87,11 @@ def main():
                     if len(image_markers) > 1:
                         pivot = image_markers[1].start()
                         nearby = source[max(0, pivot - 12000):pivot]
-                        input_tags = list(re.finditer(r'(?:D|o)\\("input"', nearby))
+                        input_tags = sorted(
+                            list(re.finditer(re.escape('D("input"'), nearby)) +
+                            list(re.finditer(re.escape('o("input"'), nearby)),
+                            key=lambda m: m.start()
+                        )
                         for item in input_tags[-15:]:
                             left = max(0, item.start() - 110)
                             right = min(len(nearby), item.end() + 270)
