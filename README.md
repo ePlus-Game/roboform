@@ -5,6 +5,13 @@
 
 There are **two independent, manually triggered real-registration workflows**. Choose **one** browser for a new account. Both require a 16+ character `ROBOFORM_MASTER_PASSWORD` repository secret, use `David Nguyen` as the default full name, and record an entry **only after RoboForm explicitly confirms account creation and the email matches**. Neither workflow bypasses human verification. **Do not run both workflows for the same email.**
 
+## Node.js version (CI and registration)
+
+- **Node.js 26 LTS (Lithium)** is the latest stable/LTS line as of 2026-11-09; the latest patch then is **26.13.0**. Node.js 27 is still **Alpha** and is not used for registration.
+- The single source of truth is [`.nvmrc`](.nvmrc) containing `26`. Every Node-powered GitHub Actions workflow uses `actions/setup-node@v7` with `node-version-file: .nvmrc` and `check-latest: true`, so it selects the newest available **26.x** patch without manual changes.
+- The workflows use `actions/checkout@v7` and `actions/setup-python@v7` to avoid the deprecated Node.js 20 runtime in previous action versions. These actions' internal runtime is separate from the Node.js version used to execute project scripts.
+- On a development machine, run `nvm use` (or install Node.js 26 LTS) and `npm test`. The `package.json` engine range excludes prerelease Node 27.
+
 ## Which browser is currently used?
 
 | Workflow | Browser / technology | Purpose | What success means |
