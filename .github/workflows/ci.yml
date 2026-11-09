@@ -24,7 +24,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Check Firefox registration Python syntax
-        run: python -m py_compile scripts/firefox_support.py scripts/register-firefox.py
+        run: python -m py_compile scripts/firefox_support.py scripts/register-firefox.py scripts/analyze-verification-image.py
+      - name: Check image verification diagnostics (no registration)
+        run: python -m unittest discover -s test -p 'test_*.py'
 
   smoke-extension:
     runs-on: ubuntu-24.04
