@@ -7,6 +7,7 @@ Records only an exact email match on RoboForm's visible success screen.
 from __future__ import annotations
 
 import csv
+import getpass
 import os
 from pathlib import Path
 import re
@@ -25,6 +26,11 @@ from firefox_support import download_signed_addon, open_roboform_start_page
 
 class RegistrationBlocked(Exception):
     """Known, safe-to-report failure that does not contain credentials."""
+
+
+def interactive_mode() -> bool:
+    """Only explicitly opted-in local runs launch a visible Firefox window."""
+    return os.getenv("FIREFOX_INTERACTIVE", "").strip().lower() in {"1", "true", "yes"}
 
 
 def normalize_email(raw: str) -> str:
@@ -185,10 +191,13 @@ def sanitized_post_submit_state(state: dict) -> dict:
     return {key: value for key, value in state.items() if key != "confirmed_email"}
 
 
-def await_confirmation(driver, email: str) -> None:
+def await_confirmation(driver, email: str, interactive: bool = False) -> None:
     started = time.monotonic()
+    deadline = 600 if interactive else 90
+    alerted_challenge = False
+    alerted_error = False
     state = None
-    while time.monotonic() - started < 90:
+    while time.monotonic() - started < deadline:
         state = inspect_post_submit(driver)
         if state["success_screen"]:
             returned = normalize_email(state["confirmed_email"])
@@ -201,29 +210,54 @@ def await_confirmation(driver, email: str) -> None:
             return
 
         elapsed = time.monotonic() - started
-        if elapsed >= 5 and state["challenge"] != "none":
-            print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
-            raise RegistrationBlocked(
-                "RoboForm displayed " + state["challenge"] +
-                " human verification after Create Account. A person must complete "
-                "this challenge in the official interactive browser; no record was written."
-            )
-        if elapsed >= 8 and state["visible_errors"] > 0:
-            print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
-            raise RegistrationBlocked(
-                "RoboForm displayed a validation/server error after Create Account. "
-                "The message was intentionally not copied into CI logs to protect account data; no record written."
-            )
+        if interactive:
+            if state["windows"] == 0:
+                raise RegistrationBlocked("Firefox was closed before signup could be confirmed. No record written.")
+            if state["challenge"] != "none" and not alerted_challenge:
+                print("FIREFOX_MANUAL_VERIFICATION: Please complete the human verification in the visible Firefox window. Selenium will only observe the official success screen.")
+                alerted_challenge = True
+            if state["visible_errors"] > 0 and not alerted_error:
+                print("FIREFOX_MANUAL_REVIEW: RoboForm shows an error. Review it directly in Firefox; sensitive message content is not logged.")
+                alerted_error = True
+        else:
+            if elapsed >= 5 and state["challenge"] != "none":
+                print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
+                raise RegistrationBlocked(
+                    "RoboForm displayed " + state["challenge"] +
+                    " human verification after Create Account. A person must complete "
+                    "this challenge in the official interactive browser; no record was written."
+                )
+            if elapsed >= 8 and state["visible_errors"] > 0:
+                print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
+                raise RegistrationBlocked(
+                    "RoboForm displayed a validation/server error after Create Account. "
+                    "The message was intentionally not copied into CI logs to protect account data; no record written."
+                )
         time.sleep(1)
 
     print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state or {}))
     raise RegistrationBlocked(
         "RoboForm did not show the verified success screen in any Firefox window "
-        "within 90 seconds. Inspect the sanitized UI state above; no record written."
+        f"within {deadline} seconds. No account was recorded."
     )
 
 
+def wait_for_manual_pre_submit_verification(driver, timeout: int = 600) -> None:
+    """Allow a person to finish an already-displayed challenge without automation."""
+    print("FIREFOX_MANUAL_VERIFICATION: Complete RoboForm's verification in Firefox; do not click Create Account yourself. Selenium will click it when enabled.")
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        submit = find_submit_button(driver)
+        if submit is not None and submit.is_enabled():
+            return
+        if not driver.window_handles:
+            raise RegistrationBlocked("Firefox was closed before human verification finished.")
+        time.sleep(1)
+    raise RegistrationBlocked("Manual verification did not enable Create Account within 10 minutes. No signup submitted.")
+
+
 def run() -> None:
+    interactive = interactive_mode()
     if os.getenv("FIREFOX_PRIVACY_CONSENT", "").lower() != "true":
         raise RegistrationBlocked(
             "Firefox Privacy consent is required. Review the agreement; keep the privacy_consent option checked if you agree."
@@ -231,6 +265,9 @@ def run() -> None:
     email = normalize_email(os.getenv("REGISTRATION_EMAIL", ""))
     full_name = os.getenv("REGISTRATION_FULL_NAME", "David Nguyen").strip()
     password = os.getenv("ROBOFORM_MASTER_PASSWORD", "")
+    if interactive and not password and os.isatty(0):
+        # Avoid saving the Master Password in shell history or the environment.
+        password = getpass.getpass("RoboForm Master Password (input hidden): ")
     if not 2 <= len(full_name) <= 80 or re.search(r'[\*?"<>|\\/]', full_name):
         raise RegistrationBlocked("Invalid full name.")
     if not password.strip() or len(password) < 16:
@@ -243,7 +280,10 @@ def run() -> None:
         if "start-page.html" not in files:
             raise RegistrationBlocked("Official RoboForm Firefox add-on does not have the expected start page.")
         opts = webdriver.FirefoxOptions()
-        opts.add_argument("-headless")
+        if not interactive:
+            opts.add_argument("-headless")
+        else:
+            print("FIREFOX_INTERACTIVE: Visible Firefox session started; use this machine's browser for any human security verification.")
         if binary := os.getenv("FIREFOX_BINARY"):
             opts.binary_location = binary
         # System-access is limited to this fresh isolated runner and used solely
@@ -279,17 +319,23 @@ def run() -> None:
             if submit is None:
                 raise RegistrationBlocked("Firefox signup Create Account button is missing; no submission attempted.")
             if not submit.is_enabled():
-                if human_verification_present(driver):
+                if interactive:
+                    wait_for_manual_pre_submit_verification(driver)
+                    submit = find_submit_button(driver)
+                    if submit is None or not submit.is_enabled():
+                        raise RegistrationBlocked("Create Account did not become enabled after human verification.")
+                elif human_verification_present(driver):
                     raise RegistrationBlocked(
                         "RoboForm requires human CAPTCHA/Turnstile verification before enabling Create Account. "
                         "Unattended GitHub Actions cannot complete this; no account was recorded."
                     )
-                raise RegistrationBlocked(
-                    "Create Account stays disabled. Check RoboForm Firefox password rules and form validation; no account recorded."
-                )
+                else:
+                    raise RegistrationBlocked(
+                        "Create Account stays disabled. Check RoboForm Firefox password rules and form validation; no account recorded."
+                    )
             submit.click()
             print("FIREFOX_SIGNUP_SUBMITTED: awaiting official confirmation; success not assumed.")
-            await_confirmation(driver, email)
+            await_confirmation(driver, email, interactive=interactive)
             print("FIREFOX_SIGNUP_CONFIRMED: RoboForm success screen verified and registration recorded.")
         finally:
             driver.quit()
