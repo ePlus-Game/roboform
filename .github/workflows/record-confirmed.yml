@@ -10,6 +10,7 @@ on:
       full_name:
         description: Full name for the account
         required: false
+        default: David Nguyen
         type: string
 
 permissions:
