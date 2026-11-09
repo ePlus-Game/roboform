@@ -21,9 +21,10 @@ try {
   console.log('SMOKE_BODY:', (await page.locator('body').innerText()).slice(0, 800));
   console.log('SMOKE_BUTTONS:', await page.locator('input[type="button"]').evaluateAll(nodes => nodes.map(n => n.value)));
   console.log('SMOKE_SETUP_HTML:', (await page.locator('#setup-page').innerHTML().catch(() => '')).slice(0, 700));
-  await page.locator('.choose-setup-way input[type="button"][value="Sign Up"]')
-    .waitFor({ state: 'visible', timeout: 20_000 });
-  await page.locator('.choose-setup-way input[type="button"][value="Sign Up"]').click();
+  await page.getByText('Sign Up', { exact: true }).last().click();
+  console.log('POST_SIGNUP_BODY:', (await page.locator('body').innerText()).slice(0, 1100));
+  console.log('POST_SIGNUP_INPUTS:', await page.locator('input').evaluateAll(nodes => nodes.map(n => ({type:n.type,placeholder:n.placeholder}))));
+
   await page.locator('.create-new-account').waitFor({ state: 'visible', timeout: 30_000 });
   console.log('Smoke PASS: official RoboForm extension opens Sign Up form in headless Playwright Chromium.');
   console.log('No personal data was submitted or account created during this smoke test.');
