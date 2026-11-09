@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { installExtension, EXTENSION_ID } from './install-extension.mjs';
-import { openSignupForm } from './signup-ui.mjs';
+import { openSignupForm, getSignupSubmissionGate } from './signup-ui.mjs';
 
 const extensionDir = await installExtension();
 const userData = await mkdtemp(join(tmpdir(), 'roboform-smoke-'));
@@ -18,47 +18,22 @@ try {
   await page.goto(`chrome-extension://${EXTENSION_ID}/start-page.html`, {
     waitUntil: 'domcontentloaded', timeout: 60_000
   });
-  // Exercise the *same* selectors used by real registration.
-  // No email, password or account submission in this smoke test.
   const { textFields, passFields } = await openSignupForm(page);
-  // Use synthetic values to exercise local form validation, but NEVER submit.
-  // This does not read any repository secret or make a registration attempt.
+  // Smoke uses synthetic data only, never a real secret or registration.
   await textFields.nth(0).fill('roboform-smoke@example.com');
   await passFields.nth(0).fill('ExampleSmokeOnly#2026Strong');
   await passFields.nth(1).fill('ExampleSmokeOnly#2026Strong');
   await textFields.nth(1).fill('Smoke Tester');
   await textFields.nth(1).blur();
-  await page.waitForTimeout(2000);
-  const state = await page.evaluate(() => ({
-    controls: [...document.querySelectorAll('input, select, textarea')].filter(e => e.getClientRects().length).map(e => ({
-      type: e.type, required: e.required, disabled: e.disabled,
-      valid: e.validity?.valid, ariaInvalid: e.getAttribute('aria-invalid'),
-      checked: (e.type === 'checkbox' || e.type === 'radio') ? e.checked : undefined,
-      // Never read or log form values, even synthetic ones.
-    })),
-    submitEnabled: [...document.querySelectorAll('button')].some(e =>
-      e.textContent?.trim() === 'Create Account' && !e.disabled),
-    errors: [...document.querySelectorAll('.error-text:not(.hidden), .error-balloon:not(.hidden)')]
-      .filter(e => e.getClientRects().length).map(e => e.textContent?.trim()).filter(Boolean).slice(0, 4)
-  }));
-  console.log('SMOKE_FORM_VALIDATION:', JSON.stringify(state));
-  // The smoke browser contains synthetic values only. Capture limited UI text
-  // without input values, credentials, DOM dumps, screenshots or full URLs.
-  const hints = await page.evaluate(() => ({
-    visibleText: (document.body?.innerText || '').slice(0, 1800),
-    buttons: [...document.querySelectorAll('button')].filter(e => e.getClientRects().length).map(e => ({
-      text: e.textContent?.trim().slice(0, 70), disabled: e.disabled,
-      type: e.type, title: e.title
-    })).slice(0, 15),
-    frameCount: document.querySelectorAll('iframe').length,
-    frameTitles: [...document.querySelectorAll('iframe')].map(e => e.title?.slice(0, 80)).slice(0, 10),
-    securityElements: [...document.querySelectorAll('[class], [id]')].filter(e =>
-      /captcha|challenge|turnstile|recaptcha|verify|security/i.test(e.className?.toString() + ' ' + e.id))
-      .slice(0, 12).map(e => ({tag: e.tagName, id: e.id, className: e.className?.toString().slice(0, 100)}))
-  }));
-  console.log('SMOKE_UI_HINTS:', JSON.stringify(hints));
-  if (!state.submitEnabled) throw new Error('Create Account stays disabled after filling synthetic valid-looking data; check local validation / required agreements before real signup.');
-  console.log('Smoke PASS: signup form can enable Create Account with synthetic data.');
+  await page.waitForTimeout(1500);
+  const { enabled, requiresHumanVerification } = await getSignupSubmissionGate(page);
+  if (requiresHumanVerification && !enabled) {
+    console.log('SMOKE_PASS: RoboForm signup UI loaded; Create Account is gated by human verification (Turnstile). Automated signup CANNOT be confirmed in unattended CI.');
+  } else if (enabled) {
+    console.log('SMOKE_PASS: RoboForm signup UI loaded; Create Account is enabled with synthetic data. No submission was attempted.');
+  } else {
+    throw new Error('Create Account is disabled without a recognized verification widget. Check local validation and RoboForm UI changes.');
+  }
   console.log('No personal data was submitted or account created during this smoke test.');
 } finally {
   if (context) await context.close();
