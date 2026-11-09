@@ -78,8 +78,10 @@ def switch_to_signup(driver) -> bool:
 
 
 def enter_signup_form(driver) -> None:
-    if not switch_to_signup(driver):
-        raise RegistrationBlocked("Firefox extension did not show a Sign Up screen after Privacy acceptance.")
+    try:
+        WebDriverWait(driver, 30).until(lambda d: switch_to_signup(d))
+    except Exception as error:
+        raise RegistrationBlocked("Firefox extension did not show Sign Up after Privacy acceptance.") from error
     if "Create Account" in body_text(driver) and len(visible_controls(driver, "input[type=password]")) >= 2:
         return
     if not click_exact_control(driver, "Sign Up"):
