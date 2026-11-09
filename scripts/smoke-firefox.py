@@ -149,10 +149,11 @@ def main() -> None:
                 body = driver.find_element(By.TAG_NAME, "body").text
             if "Sign Up" in body or "Create Account" in body:
                 print("FIREFOX_SIGNUP_UI_READY: official extension signup entrypoint is available")
+            elif "Privacy" in body and "your consent is required" in body:
+                print("FIREFOX_PRIVACY_CONSENT_REQUIRED: RoboForm Firefox onboarding requires user acceptance before signup. The smoke test does not accept privacy terms on the user's behalf.")
             else:
-                print("FIREFOX_UI_LABELS:", repr(body[:550]))
-                print("FIREFOX_LIMITATION: extension start page opened without Sign Up UI; manual Firefox onboarding may be required")
-            print("NO_REGISTRATION_ATTEMPTED: no real data submitted, no CAPTCHA bypass")
+                print("FIREFOX_LIMITATION: extension startup UI not recognized; check onboarding in an interactive Firefox session")
+            print("NO_REGISTRATION_ATTEMPTED: no real data submitted, no privacy consent given, no CAPTCHA bypass")
         finally:
             driver.quit()
 
