@@ -1,0 +1,13 @@
+{
+  "name": "roboform-signup-actions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=26" },
+  "scripts": {
+    "register": "node scripts/register.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": { "playwright": "^1.56.1" }
+}
