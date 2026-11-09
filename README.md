@@ -5,6 +5,24 @@
 
 There are **two independent, manually triggered real-registration workflows**. Choose **one** browser for a new account. Both require a 16+ character `ROBOFORM_MASTER_PASSWORD` repository secret, use `David Nguyen` as the default full name, and record an entry **only after RoboForm explicitly confirms account creation and the email matches**. **Do not run both workflows for the same email.**
 
+## Optional email generation and domain-specific records
+
+Both manually-dispatched registration workflows accept an **optional email**. Leave
+the Email field empty to generate a unique random address such as
+`a1b2c3d4e5f60708@hoangnnm.tech` (16 lowercase hexadecimal characters).
+The generator checks **both** `data/registrations.csv` and `data/hoangnnm.csv`,
+including unverified entries, and retries on any collision. Both workflows
+use the same concurrency group to serialize registration attempts.
+
+- Confirmed `@hoangnnm.tech` accounts (generated **or entered manually**) are
+  stored in `data/hoangnnm.csv`.
+- Confirmed accounts at other domains stay in `data/registrations.csv`.
+- Neither CSV is updated unless RoboForm confirms the exact selected email.
+- The generated address appears in the GitHub Actions log and Job Summary.
+- **Important:** Generating an address does not provision a mailbox. The
+  `hoangnnm.tech` domain must support the address or catch-all forwarding
+  if registration requires receiving confirmation emails.
+
 ## Node.js version (CI and registration)
 
 - **Node.js 26 LTS (Lithium)** is the latest stable/LTS line as of 2026-11-09; the latest patch then is **26.13.0**. Node.js 27 is still **Alpha** and is not used for registration.
