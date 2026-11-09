@@ -1,41 +1,38 @@
-# RoboForm account registration research
+# RoboForm account registration — GitHub Actions + Playwright
 
-Private project for reviewing RoboForm signup and logging email addresses entered through GitHub Actions.
+[![Register via GitHub Actions](https://img.shields.io/badge/Playwright-Register_RoboForm-238636?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml)
 
-## Quick start — enter email
+[**Open the signup workflow**](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml) — then select **Run workflow**.
 
-[![Nhập email ngay](https://img.shields.io/badge/GitHub_Actions-Nh%E1%BA%ADp_email_ngay-238636?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml)
+## Setup (once)
 
-**[Open the email entry workflow](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml)** (text link if the badge does not load).
+1. Go to **Settings → Secrets and variables → Actions → New repository secret**.
+2. Create a secret named **`ROBOFORM_MASTER_PASSWORD`** containing a strong, unique Master Password (16+ characters) for **this** account. Never type the password into the Actions email input or commit it to Git. Make sure you personally retain it securely; RoboForm cannot simply reset encrypted vault contents without the recovery setup.
+3. After this PR is merged, open the green button above, enter your **email** and optionally **full_name**, then run. No `I CONFIRM` field.
 
-The button opens the repository's **Log RoboForm registration email** workflow directly. On that page click **Run workflow**, enter your **email**, then click **Run workflow** to submit. You must be signed into GitHub and have write access to the repository. GitHub's standard workflow page does not automatically expand the email input form from a README link.
+**Use a distinct Master Password for each account.** If you register another email, change the secret first. The workflow handles one account per manually triggered run; no schedules or automatic retries.
 
-**Note:** This action logs an **unverified email**; it does not create or validate a RoboForm account.
+## What actually happens
 
-## Extension findings
+- GitHub Actions runs **Node.js 26 LTS** and Playwright's Chromium, not a fake CSV logger.
+- The runner downloads the RoboForm browser extension from **Chrome Web Store**, verifies its manifest key hashes to extension ID `pnlccmojcmeohlpggmfnbbiapkmbliob`, then launches it in a disposable browser profile. We don't redistribute RoboForm binaries or upload account credentials as artifacts.
+- Playwright opens `start-page.html`, clicks **Sign Up**, fills email + Master Password + password confirmation + full name, then clicks **Create Account**.
+- Only when the extension displays **Account created successfully** **and** its confirmation email exactly matches the requested email does it write to `data/registrations.csv`.
+- The file stores `email,registered_at_utc,registered_date_vn,verification_method`. New verified rows use `signup_ui_success`. Earlier `unverified` rows are upgraded **only after confirmed success**, not blocked as duplicates. No password is saved.
+- Errors, mismatches, CAPTCHA, OTP/new-device verification, or missing success screen cause the workflow to **fail without a success record**. Check its logs and the job summary to diagnose the point of failure.
 
-The supplied RoboForm Password Manager archive was v10.0.2.0 (Chrome extension ID `pnlccmojcmeohlpggmfnbbiapkmbliob`). Its signup UI accepts an email address, Master Password, confirmation, and name, and can display `Account created successfully` after the signup succeeds.
+## Why an OTP may not arrive
 
-Official RoboForm guidance requires completing a security check/CAPTCHA when creating an account. This repository's current GitHub Action does **not** automate the signup itself.
+Previously this repository's action only appended an **unverified email** and **never submitted an account registration**. That successful GitHub run did not mean RoboForm sent an email.
 
-## Available GitHub Action
+RoboForm's documentation states email OTP is usually a **device authorization method for sign-in**; it is not a guarantee that signup itself generates OTP. RoboForm also documents **human security verification (CAPTCHA)** during account creation.
 
-Go to **Actions → Log RoboForm registration email → Run workflow** and enter only the `email` input.
+A hosted headless CI runner **cannot reliably complete an interactive challenge**. This project does not solve or bypass CAPTCHA. Even a Playwright signup may stop before the server accepts the account. A human may need to complete the official RoboForm signup UI instead. Do not assume that a missing OTP is a deliverability problem until the signup itself has been confirmed.
 
-The workflow records that email along with the current UTC timestamp and date in `Asia/Ho_Chi_Minh` to `data/registrations.csv`, then commits the tracking log to `main`.
+## Verification & limitations
 
-**No confirmation input is required.** The previous `I CONFIRM` manual attestation has been removed.
+`npm test` runs CSV, dedupe and input tests. CI's **smoke-extension** job downloads the extension and opens the Sign Up form with Playwright **without submitting a real account**. The real registration job requires an operator-supplied email and a GitHub Actions secret, so CI smoke success alone cannot prove RoboForm account creation.
 
-### Tracking semantics
+The signup selectors were derived from user-provided RoboForm extension **v10.0.2.0**; live versions might have changed. For safety, no browser screenshots or traces containing credentials are uploaded. The repository and its logs should remain private.
 
-- All newly added entries have `verification_method=unverified`. They are **not proof of successful RoboForm registration**.
-- For backward compatibility, the CSV still uses the existing column names `registered_at_utc` and `registered_date_vn`. In new `unverified` rows, these fields mean **the time/date the email was logged**, *not* the confirmed creation date of a RoboForm account.
-- Duplicate email addresses and invalid input are rejected.
-- No password or token is stored in the tracking file.
-- The workflow has no schedule and does not attempt any CAPTCHA bypass.
-
-## Development
-
-Run `node --test test/record.test.mjs` for local tests. CI runs on pull requests and main.
-
-If the goal is unattended **account creation**, this project still needs a supported RoboForm provisioning flow or a legitimate interactive security verification process; removing an attestation field does not complete signup.
+References: [RoboForm signup help](https://help.roboform.com/hc/en-us/articles/115005962708-RoboForm-Windows-Installation-and-setup) · [RoboForm OTP documentation](https://help.roboform.com/hc/en-us/articles/115005043767-How-to-enable-One-Time-Password-OTP-via-email-or-SMS) · [Playwright extensions](https://playwright.dev/docs/chrome-extensions).
