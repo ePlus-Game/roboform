@@ -142,9 +142,15 @@ def main() -> None:
             body = WebDriverWait(driver, 20).until(
                 lambda d: d.find_element(By.TAG_NAME, "body").text
             )
+            if "Sign Up" not in body and "Create Account" not in body:
+                # Firefox extension initialization differs from Chromium.
+                # Keep diagnostics limited to text labels in this fresh blank profile.
+                time.sleep(6)
+                body = driver.find_element(By.TAG_NAME, "body").text
             if "Sign Up" in body or "Create Account" in body:
                 print("FIREFOX_SIGNUP_UI_READY: official extension signup entrypoint is available")
             else:
+                print("FIREFOX_UI_LABELS:", repr(body[:550]))
                 print("FIREFOX_LIMITATION: extension start page opened without Sign Up UI; manual Firefox onboarding may be required")
             print("NO_REGISTRATION_ATTEMPTED: no real data submitted, no CAPTCHA bypass")
         finally:
