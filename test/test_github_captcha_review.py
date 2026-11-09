@@ -76,6 +76,40 @@ class GithubReviewTests(unittest.TestCase):
         self.assertIn("không phát hiện được", bodies[1])
         self.assertIn("CHƯA XÁC MINH", bodies[0])
 
+    def test_issue_shows_both_ocr_hints_with_clear_warning(self):
+        reviewer = self.setup_reviewer()
+        bodies = []
+
+        def fake_api(method, suffix, payload=None, missing_ok=False):
+            if method == "PUT":
+                return {"content": {"sha": "b" * 40}}
+            if method == "POST" and suffix == "issues":
+                bodies.append(payload["body"])
+                return {"number": 42, "html_url": "https://github.com/example/roboform/issues/42"}
+            return None
+
+        reviewer.api = fake_api
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp) / "isolated.png"
+            image.write_bytes(review_mod.PNG_MAGIC + b"test-png-data" * 12)
+            with patch("builtins.print"):
+                reviewer.publish(
+                    image, "G7TDR", "73.5",
+                    ddddocr_hint="CLOUD7", ddddocr_enabled=True
+                )
+                reviewer.publish(
+                    image, None, "N/A",
+                    ddddocr_hint="<script>", ddddocr_enabled=True
+                )
+        self.assertIn("CLOUD7", bodies[0])
+        self.assertIn("G7TDR", bodies[0])
+        self.assertIn("Tesseract", bodies[0])
+        self.assertIn("CHƯA XÁC MINH", bodies[0])
+        self.assertIn("N/A (API nhận dạng không cung cấp)", bodies[0])
+        self.assertIn("Không có gợi ý hợp lệ", bodies[1])
+        self.assertNotIn("<script>", bodies[1])
+        self.assertIn("/captcha ABC123", bodies[0])
+
     def test_only_workflow_actor_can_supply_code(self):
         reviewer = self.setup_reviewer()
         reviewer.issue = 42
