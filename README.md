@@ -4,6 +4,26 @@
 
 [**Open the signup workflow**](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml) — then select **Run workflow**.
 
+## Which browser is currently used?
+
+| Workflow | Browser / technology | Purpose | What success means |
+| --- | --- | --- | --- |
+| [`record-confirmed.yml`](.github/workflows/record-confirmed.yml) | **Chromium + Playwright**, RoboForm Chrome Web Store extension | Manual-triggered attempt to register a real account | Only RoboForm's confirmed success screen **and exact email match** allow a verified CSV record |
+| [`ci.yml`](.github/workflows/ci.yml) | **Chromium + Playwright** (plus Node tests) | Check extension signup UI and validation without submission | Passing smoke checks **does not** mean an account was created |
+| [`firefox-smoke.yml`](.github/workflows/firefox-smoke.yml) | **Firefox + Selenium**, RoboForm official Mozilla Add-ons XPI | Separate browser feasibility test; no signup, credentials, or CSV write | Firefox extension starts; human onboarding may still be required |
+
+**Default registration remains Chromium.** Merging the Firefox experiment did **not** switch `npm run register` or `record-confirmed.yml` to Firefox.
+
+### Firefox experiment (merged PR #9)
+
+On November 9, 2026, [Firefox CI run #42569477955](https://github.com/ePlus-Game/roboform/actions/runs/42569477955) successfully installed Firefox **159.0.1**, downloaded/installed RoboForm Firefox extension **9.9.9.1**, and opened its internal start page. The first screen was **Privacy**, asking the user to consent to data processing. The CI test identified this requirement but **did not accept it on the user's behalf**, access the signup form, or submit an account.
+
+To re-run this **safe, non-registration** experiment, open [Firefox RoboForm smoke (no registration)](https://github.com/ePlus-Game/roboform/actions/workflows/firefox-smoke.yml) → **Run workflow** on `main`. Its `FIREFOX_PRIVACY_CONSENT_REQUIRED` message identifies the onboarding gate; a green workflow run is **not proof of registration**.
+
+To continue past Privacy in Firefox, use an interactive Firefox window with the [official RoboForm add-on](https://addons.mozilla.org/en-US/firefox/addon/roboform/), read the agreement and consent personally if you choose, then complete any required security verification. Hosted, unattended Actions cannot assume privacy consent or solve human-only challenges.
+
+
+
 ## Current limitation: RoboForm human verification
 
 The actual GitHub Actions registration job may **not** be able to create an account unattended. In the live registration run on 2026-11-09, all four form inputs passed basic HTML validity checks, but the **Create Account** button remained disabled. A no-submission smoke test confirmed the presence of RoboForm's **Cloudflare Turnstile** human-verification widget. This is a deliberate interactive security requirement; this workflow does **not** attempt to bypass it.
@@ -16,7 +36,7 @@ When Turnstile blocks submission, the registration job fails immediately with an
 
 1. Go to **Settings → Secrets and variables → Actions → New repository secret**.
 2. Create a secret named **`ROBOFORM_MASTER_PASSWORD`** containing a strong, unique Master Password (16+ characters) for **this** account. Never type the password into the Actions email input or commit it to Git. Make sure you personally retain it securely; RoboForm cannot simply reset encrypted vault contents without the recovery setup.
-3. After this PR is merged, open the green button above, enter your **email** and optionally **full_name**, then run. No `I CONFIRM` field.
+3. Open the registration workflow link above, enter an **email** and optionally edit **full_name** (defaults to `David Nguyen`), then choose **Run workflow**. No `I CONFIRM` field. If RoboForm requires human verification, this unattended attempt will stop without recording a signup.
 
 **Use a distinct Master Password for each account.** If you register another email, change the secret first. The workflow handles one account per manually triggered run; no schedules or automatic retries.
 
@@ -49,8 +69,8 @@ A hosted headless CI runner **cannot reliably complete an interactive challenge*
 
 ## Verification & limitations
 
-`npm test` runs CSV, dedupe and input tests. CI's **smoke-extension** job downloads the extension and opens the Sign Up form with Playwright **without submitting a real account**. The real registration job requires an operator-supplied email and a GitHub Actions secret, so CI smoke success alone cannot prove RoboForm account creation.
+`npm test` runs CSV, dedupe and input tests. CI's Chromium **smoke-extension** job downloads the extension and opens the Sign Up form with Playwright **without submitting a real account**; it can also detect that Turnstile prevents submission. The **firefox-extension** job separately tests Mozilla's extension and Firefox onboarding, also without registration. The real Chromium registration job requires an operator-supplied email and a GitHub Actions secret. **Neither smoke test can prove that RoboForm created an account.**
 
 The signup selectors were derived from user-provided RoboForm extension **v10.0.2.0**; live versions might have changed. For safety, no browser screenshots or traces containing credentials are uploaded. The repository and its logs should remain private.
 
-References: [RoboForm signup help](https://help.roboform.com/hc/en-us/articles/115005962708-RoboForm-Windows-Installation-and-setup) · [RoboForm OTP documentation](https://help.roboform.com/hc/en-us/articles/115005043767-How-to-enable-One-Time-Password-OTP-via-email-or-SMS) · [Playwright extensions](https://playwright.dev/docs/chrome-extensions).
+References: [RoboForm signup help](https://help.roboform.com/hc/en-us/articles/115005962708-RoboForm-Windows-Installation-and-setup) · [RoboForm OTP documentation](https://help.roboform.com/hc/en-us/articles/115005043767-How-to-enable-One-Time-Password-OTP-via-email-or-SMS) · [Playwright extensions](https://playwright.dev/docs/chrome-extensions) · [Selenium Firefox](https://www.selenium.dev/documentation/webdriver/browsers/firefox/) · [RoboForm on Mozilla Add-ons](https://addons.mozilla.org/en-US/firefox/addon/roboform/).
