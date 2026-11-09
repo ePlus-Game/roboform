@@ -51,7 +51,7 @@ def main() -> None:
                 print("FIREFOX_PRIVACY_CONSENT_REQUIRED: RoboForm Firefox onboarding requires user acceptance before signup. The smoke test does not accept privacy terms on the user's behalf.")
             else:
                 print("FIREFOX_LIMITATION: extension startup UI not recognized; check onboarding in an interactive Firefox session")
-            print("NO_REGISTRATION_ATTEMPTED: no real data submitted, no privacy consent given, no CAPTCHA bypass")
+            print("FIREFOX_SMOKE_COMPLETED: onboarding UI inspected; registration not submitted")
         finally:
             driver.quit()
 
