@@ -1,0 +1,38 @@
+name: Review upstream SVG CAPTCHA solver (offline only)
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/review-svg-captcha-solver.py'
+      - 'test/test_review_svg_captcha_solver.py'
+      - '.github/workflows/review-svg-captcha-solver.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout project (no credentials persisted)
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Checkout pinned public solver (isolated samples only)
+        uses: actions/checkout@v7
+        with:
+          repository: AmireNoori/SVG-Captcha-Solver
+          ref: 5e56a5240c50077e027dc2e094ba64124ecbfd84
+          path: upstream-svg-solver
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Run isolated unit tests
+        run: |
+          python -m py_compile scripts/review-svg-captcha-solver.py
+          python -m unittest discover -s test -p 'test_review_svg_captcha_solver.py' -v
+      - name: Evaluate upstream fixtures; check local SVG structure only
+        run: python scripts/review-svg-captcha-solver.py --upstream upstream-svg-solver
