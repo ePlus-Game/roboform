@@ -394,6 +394,51 @@ def inspect_captured_verification_image(image: Path = Path("dist/firefox-verific
     return suggestion, confidence
 
 
+
+def inspect_ddddocr_hint(image: Path = Path("dist/firefox-verification-image.png")) -> str | None:
+    """Optional independent local ddddocr hint, for human review only.
+
+    The prediction never becomes a form value. Tesseract remains unchanged.
+    """
+    try:
+        safe_env = {
+            key: os.environ[key]
+            for key in ("PATH", "HOME", "LANG")
+            if key in os.environ
+        }
+        completed = subprocess.run(
+            [sys.executable, "scripts/ddddocr-hint.py", str(image)],
+            check=False,
+            timeout=40,
+            env=safe_env,
+            capture_output=True,
+            text=True,
+        )
+        suggestion = None
+        for line in (getattr(completed, "stdout", "") or "").splitlines():
+            if line.startswith("FIREFOX_DDDDOCR_STATUS:"):
+                # Only safe, fixed vocabulary is emitted to CI.
+                if re.fullmatch(
+                    r"FIREFOX_DDDDOCR_STATUS: (?:unverified-suggestion|no-safe-text|unavailable)",
+                    line,
+                ):
+                    print(line)
+            elif line.startswith("FIREFOX_DDDDOCR_RECOGNIZED_TEXT:"):
+                match = re.fullmatch(
+                    r"FIREFOX_DDDDOCR_RECOGNIZED_TEXT: ([A-Za-z0-9]{1,12}) \\(unverified\\)",
+                    line,
+                )
+                if match:
+                    suggestion = match.group(1)
+                    print(line)
+        if completed.returncode:
+            print("FIREFOX_DDDDOCR_STATUS: unavailable")
+        return suggestion
+    except (OSError, subprocess.TimeoutExpired):
+        print("FIREFOX_DDDDOCR_STATUS: unavailable")
+        return None
+
+
 def sanitized_post_submit_state(state: dict) -> dict:
     return {key: value for key, value in state.items() if key != "confirmed_email"}
 
@@ -432,8 +477,14 @@ def await_confirmation(driver, email: str) -> None:
                         if not capture_verification_image(driver, image):
                             raise ReviewUnavailable("Verification image could not be captured.")
                         hint, confidence = inspect_captured_verification_image(image)
+                        ddddocr_enabled = os.getenv("ROBOFORM_DDDDOCR_ENABLED", "").lower() == "true"
+                        ddddocr_hint = inspect_ddddocr_hint(image) if ddddocr_enabled else None
                         reviewer = GithubCaptchaReview()
-                        reviewer.publish(image, hint, confidence)
+                        reviewer.publish(
+                            image, hint, confidence,
+                            ddddocr_hint=ddddocr_hint,
+                            ddddocr_enabled=ddddocr_enabled,
+                        )
                         # The OCR hint is NEVER used as the form value.
                         code = reviewer.wait_for_answer(420)
                         if not focus_manual_verification_input(driver):
