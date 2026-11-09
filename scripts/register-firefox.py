@@ -116,7 +116,7 @@ def find_submit_button(driver):
 def inspect_post_submit(driver) -> dict:
     """Inspect all browser tabs; never collect or log values, URLs or page HTML.
 
-    The Firefox add-on may display a challenge in a different tab/window.
+    The Firefox add-on may use a separate window.
     Log only whitelisted UI states so Master Password and tokens stay private.
     """
     state = {
@@ -182,11 +182,7 @@ def inspect_post_submit(driver) -> dict:
 
 
 def capture_verification_image(driver, output: Path = Path("dist/firefox-verification-image.png")) -> bool:
-    """Save only the displayed image challenge for authorized manual review.
-
-    Do not capture browser pages, form inputs, passwords, cookies, network
-    traffic, CAPTCHA responses, or authentication tokens.
-    """
+    """Capture an isolated image element without surrounding form content."""
     try:
         original = driver.current_window_handle
     except Exception:
@@ -226,7 +222,7 @@ def capture_verification_image(driver, output: Path = Path("dist/firefox-verific
                                 return True
                             output.unlink(missing_ok=True)
             except Exception:
-                # The challenge window may close or the image may be unavailable.
+                # The window may close or the image may be unavailable.
                 continue
     finally:
         if original and original in driver.window_handles:
