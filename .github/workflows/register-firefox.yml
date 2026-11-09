@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       email:
-        description: Email for a new RoboForm account
-        required: true
+        description: Optional email; blank generates an unused xxx@hoangnnm.tech
+        required: false
+        default: ''
         type: string
       full_name:
         description: Full name for the account
@@ -66,6 +67,8 @@ jobs:
           node-version-file: '.nvmrc'
           check-latest: true
           package-manager-cache: false
+      - name: Select supplied email or generate a unique hoangnnm.tech address
+        run: node scripts/select-registration-email.mjs
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -120,7 +123,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/registrations.csv
+          git add data/registrations.csv data/hoangnnm.csv
           if git diff --cached --quiet; then
             echo "No newly verified Firefox signup receipt generated."
             exit 1
