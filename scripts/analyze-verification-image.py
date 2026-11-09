@@ -70,7 +70,6 @@ def main() -> None:
 
     score = f"{mean:.1f}" if mean is not None else "N/A"
     print(f"FIREFOX_OCR_READONLY: image={width}x{height} recognized_groups={count} mean_confidence={score}")
-    print("FIREFOX_OCR_NOTE: recognized characters are discarded; no CAPTCHA response is submitted")
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with Path(summary).open("a", encoding="utf-8") as out:
