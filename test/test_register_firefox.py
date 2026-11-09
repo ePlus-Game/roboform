@@ -78,6 +78,8 @@ class RegistrationGuards(unittest.TestCase):
             with patch.dict(os.environ, {"REGISTRATION_EMAIL": "expected@example.com"}):
                 registration.await_confirmation(FakeDriver("expected@example.com"), "expected@example.com")
                 record.assert_called_once()
+                self.assertEqual(record.call_args.kwargs["env"]["REGISTRATION_EMAIL"], "expected@example.com")
+                self.assertEqual(record.call_args.kwargs["env"]["CONFIRMED_EMAIL"], "expected@example.com")
                 record.reset_mock()
                 with self.assertRaisesRegex(registration.RegistrationBlocked, "does not match"):
                     registration.await_confirmation(FakeDriver("wrong@example.com"), "expected@example.com")
