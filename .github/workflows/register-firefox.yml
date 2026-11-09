@@ -17,6 +17,11 @@ on:
         required: true
         type: boolean
         default: true
+      ddddocr_hint:
+        description: Include read-only ddddocr hint in the GitHub human verification Issue
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -74,17 +79,22 @@ jobs:
           python -m pip install 'selenium>=4.30,<5'
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends tesseract-ocr
+      - name: Install optional ddddocr model for human review
+        if: ${{ inputs.ddddocr_hint }}
+        run: python -m pip install 'ddddocr==1.6.1'
       - name: Test source and records
         run: |
-          python -m py_compile scripts/firefox_support.py scripts/register-firefox.py scripts/analyze-verification-image.py scripts/github_captcha_review.py
+          python -m py_compile scripts/firefox_support.py scripts/register-firefox.py scripts/analyze-verification-image.py scripts/github_captcha_review.py scripts/ddddocr-hint.py
           python -m unittest discover -s test -p 'test_register_firefox.py' -v
           python -m unittest discover -s test -p 'test_github_captcha_review.py' -v
+          python -m unittest discover -s test -p 'test_ddddocr_hint.py' -v
           npm test
       - name: Register through official RoboForm Firefox extension
         env:
           FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
           GITHUB_TOKEN: ${{ github.token }}
           ROBOFORM_GITHUB_CAPTCHA_REVIEW: 'true'
+          ROBOFORM_DDDDOCR_ENABLED: ${{ inputs.ddddocr_hint }}
         run: python scripts/register-firefox.py
       - name: Upload original PNG verification screenshot (no ZIP)
         if: ${{ failure() }}
