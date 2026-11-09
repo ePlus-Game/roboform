@@ -1,24 +1,28 @@
-# RoboForm account registration — GitHub Actions + Playwright
+# RoboForm registration — Chromium and Firefox
 
-[![Register via GitHub Actions](https://img.shields.io/badge/Playwright-Register_RoboForm-238636?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml)
+[![Chromium registration](https://img.shields.io/badge/Chromium-Register-238636?style=for-the-badge&logo=googlechrome&logoColor=white)](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml)
+[![Firefox registration](https://img.shields.io/badge/Firefox-Register-238636?style=for-the-badge&logo=firefoxbrowser&logoColor=white)](https://github.com/ePlus-Game/roboform/actions/workflows/register-firefox.yml)
 
-[**Open the signup workflow**](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml) — then select **Run workflow**.
+There are **two independent, manually triggered real-registration workflows**. Choose **one** browser for a new account. Both require a 16+ character `ROBOFORM_MASTER_PASSWORD` repository secret, use `David Nguyen` as the default full name, and record an entry **only after RoboForm explicitly confirms account creation and the email matches**. Neither workflow bypasses human verification. **Do not run both workflows for the same email.**
 
 ## Which browser is currently used?
 
 | Workflow | Browser / technology | Purpose | What success means |
 | --- | --- | --- | --- |
 | [`record-confirmed.yml`](.github/workflows/record-confirmed.yml) | **Chromium + Playwright**, RoboForm Chrome Web Store extension | Manual-triggered attempt to register a real account | Only RoboForm's confirmed success screen **and exact email match** allow a verified CSV record |
+| [`register-firefox.yml`](.github/workflows/register-firefox.yml) | **Firefox + Selenium**, RoboForm Mozilla Add-ons extension | Independent real signup attempt, requiring the operator's explicit Privacy consent | Only RoboForm's confirmed success screen **and exact email match** allow a verified CSV record |
 | [`ci.yml`](.github/workflows/ci.yml) | **Chromium + Playwright** (plus Node tests) | Check extension signup UI and validation without submission | Passing smoke checks **does not** mean an account was created |
 | [`firefox-smoke.yml`](.github/workflows/firefox-smoke.yml) | **Firefox + Selenium**, RoboForm official Mozilla Add-ons XPI | Separate browser feasibility test; no signup, credentials, or CSV write | Firefox extension starts; human onboarding may still be required |
 
-**Default registration remains Chromium.** Merging the Firefox experiment did **not** switch `npm run register` or `record-confirmed.yml` to Firefox.
+**Chromium and Firefox are separate workflows:** `record-confirmed.yml` retains the existing Chromium implementation; `register-firefox.yml` adds a Firefox-specific implementation. The `firefox-smoke.yml` check is separate and **never registers a real account**.
 
 ### Firefox experiment (merged PR #9)
 
 On November 9, 2026, [Firefox CI run #42569477955](https://github.com/ePlus-Game/roboform/actions/runs/42569477955) successfully installed Firefox **159.0.1**, downloaded/installed RoboForm Firefox extension **9.9.9.1**, and opened its internal start page. The first screen was **Privacy**, asking the user to consent to data processing. The CI test identified this requirement but **did not accept it on the user's behalf**, access the signup form, or submit an account.
 
 To re-run this **safe, non-registration** experiment, open [Firefox RoboForm smoke (no registration)](https://github.com/ePlus-Game/roboform/actions/workflows/firefox-smoke.yml) → **Run workflow** on `main`. Its `FIREFOX_PRIVACY_CONSENT_REQUIRED` message identifies the onboarding gate; a green workflow run is **not proof of registration**.
+
+**The Firefox registration workflow is different:** the manual dispatch includes a required **privacy_consent** checkbox. Only if the operator actively checks it does Selenium click RoboForm's displayed **Accept** control; it then attempts to fill the real Sign Up form. The browser may still require human CAPTCHA or Turnstile verification, in which case the action stops with failure and writes no record. The Firefox registration path is **experimental** and has not been proven to create an account unattended.
 
 To continue past Privacy in Firefox, use an interactive Firefox window with the [official RoboForm add-on](https://addons.mozilla.org/en-US/firefox/addon/roboform/), read the agreement and consent personally if you choose, then complete any required security verification. Hosted, unattended Actions cannot assume privacy consent or solve human-only challenges.
 
@@ -36,7 +40,8 @@ When Turnstile blocks submission, the registration job fails immediately with an
 
 1. Go to **Settings → Secrets and variables → Actions → New repository secret**.
 2. Create a secret named **`ROBOFORM_MASTER_PASSWORD`** containing a strong, unique Master Password (16+ characters) for **this** account. Never type the password into the Actions email input or commit it to Git. Make sure you personally retain it securely; RoboForm cannot simply reset encrypted vault contents without the recovery setup.
-3. Open the registration workflow link above, enter an **email** and optionally edit **full_name** (defaults to `David Nguyen`), then choose **Run workflow**. No `I CONFIRM` field. If RoboForm requires human verification, this unattended attempt will stop without recording a signup.
+3. Choose [**Register — Chromium**](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml) or [**Register — Firefox**](https://github.com/ePlus-Game/roboform/actions/workflows/register-firefox.yml). Select **Run workflow** on `main`, enter **email** and optionally edit **full_name** (defaults to `David Nguyen`).
+4. **Firefox only:** read [RoboForm's Privacy Policy](https://www.roboform.com/privacy-policy) and the Firefox add-on's Privacy screen. Select **privacy_consent** only if you personally agree; without it the Firefox workflow fails before launching the browser. If RoboForm requests further human verification, the run stops without recording a signup.
 
 **Use a distinct Master Password for each account.** If you register another email, change the secret first. The workflow handles one account per manually triggered run; no schedules or automatic retries.
 
@@ -50,7 +55,7 @@ The workflow now checks the configured secret **before** installing dependencies
 
 If the preflight passes, later signup errors concern browser registration or RoboForm verification, not this secret-length check.
 
-## What actually happens
+## Chromium registration flow
 
 - GitHub Actions runs **Node.js 26 LTS** and Playwright's Chromium, not a fake CSV logger.
 - The runner downloads the RoboForm browser extension from **Chrome Web Store**, verifies its manifest key hashes to extension ID `pnlccmojcmeohlpggmfnbbiapkmbliob`, then launches it in a disposable browser profile. We don't redistribute RoboForm binaries or upload account credentials as artifacts.
@@ -58,6 +63,16 @@ If the preflight passes, later signup errors concern browser registration or Rob
 - Only when the extension displays **Account created successfully** **and** its confirmation email exactly matches the requested email does it write to `data/registrations.csv`.
 - The file stores `email,registered_at_utc,registered_date_vn,verification_method`. New verified rows use `signup_ui_success`. Earlier `unverified` rows are upgraded **only after confirmed success**, not blocked as duplicates. No password is saved.
 - Errors, mismatches, CAPTCHA, OTP/new-device verification, or missing success screen cause the workflow to **fail without a success record**. Check its logs and the job summary to diagnose the point of failure.
+
+## Firefox registration flow (experimental)
+
+- Trigger [`register-firefox.yml`](.github/workflows/register-firefox.yml) manually with the account email, full name and **explicit Privacy consent**.
+- The runner starts Firefox and Selenium, downloads the official Mozilla-signed RoboForm Firefox extension, then opens its internal start page.
+- Only with the caller's expressed agreement, Selenium uses the extension's own **Accept** button on the Privacy onboarding screen; it does not skip this screen.
+- If the Sign Up form is available, it fills the email, Master Password, password confirmation and full name and tries to submit using the visible **Create Account** button.
+- **No CAPTCHA/Turnstile solving or bypass:** if human verification blocks the button or submission, the job fails. Do not treat a green install/smoke test as proof of successful signup.
+- After RoboForm displays its expected success message **and** confirms the exact requested email, the workflow writes a `firefox_signup_ui_success` entry to `data/registrations.csv`. The Chromium flow retains `signup_ui_success` for backwards compatibility.
+- The two registration workflows share the same concurrency group and CSV deduplication. Use a unique Master Password for each new account. Do not replay HAR authentication requests, upload sensitive HAR files or use stale sessions.
 
 ## Why an OTP may not arrive
 
@@ -69,7 +84,7 @@ A hosted headless CI runner **cannot reliably complete an interactive challenge*
 
 ## Verification & limitations
 
-`npm test` runs CSV, dedupe and input tests. CI's Chromium **smoke-extension** job downloads the extension and opens the Sign Up form with Playwright **without submitting a real account**; it can also detect that Turnstile prevents submission. The **firefox-extension** job separately tests Mozilla's extension and Firefox onboarding, also without registration. The real Chromium registration job requires an operator-supplied email and a GitHub Actions secret. **Neither smoke test can prove that RoboForm created an account.**
+`npm test` runs CSV, dedupe and input tests. CI's Chromium **smoke-extension** job downloads the extension and opens the Sign Up form with Playwright **without submitting a real account**; it can also detect that Turnstile prevents submission. The **firefox-extension** job separately tests Mozilla's extension and Firefox onboarding, also without registration. **Both real-registration jobs** require an operator-supplied email and a GitHub Actions secret, and Firefox requires explicit Privacy consent. **Neither smoke test can prove that RoboForm created an account.**
 
 The signup selectors were derived from user-provided RoboForm extension **v10.0.2.0**; live versions might have changed. For safety, no browser screenshots or traces containing credentials are uploaded. The repository and its logs should remain private.
 
