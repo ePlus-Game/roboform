@@ -256,22 +256,39 @@ def sanitized_post_submit_state(state: dict) -> dict:
     return {key: value for key, value in state.items() if key != "confirmed_email"}
 
 
+def record_confirmed_state(state: dict, email: str) -> None:
+    """Record a signup only when the official success screen matches the email."""
+    if not state.get("success_screen"):
+        raise RegistrationBlocked("RoboForm success confirmation is missing; no record written.")
+    returned = normalize_email(state.get("confirmed_email") or "")
+    if returned != email:
+        raise RegistrationBlocked("Confirmed email does not match the requested account. No record written.")
+    env = dict(os.environ)
+    env["REGISTRATION_EMAIL"] = email
+    env["CONFIRMED_EMAIL"] = returned
+    subprocess.run(["node", "scripts/record-firefox.mjs"], check=True, env=env)
+
+
+def monitor_manual_completion(driver, email: str, timeout_seconds: int = 300) -> None:
+    """Observe the visible browser; the operator performs any required verification."""
+    started = time.monotonic()
+    print("FIREFOX_AUTO_RESUME_WAITING: complete any verification in Firefox; no CAPTCHA is auto-entered.")
+    while time.monotonic() - started < timeout_seconds:
+        state = inspect_post_submit(driver)
+        if state["success_screen"]:
+            record_confirmed_state(state, email)
+            return
+        time.sleep(1)
+    raise RegistrationBlocked("Manual verification timed out without an official success screen; no record written.")
+
+
 def await_confirmation(driver, email: str) -> None:
     started = time.monotonic()
     state = None
     while time.monotonic() - started < 90:
         state = inspect_post_submit(driver)
         if state["success_screen"]:
-            returned = normalize_email(state["confirmed_email"])
-            if returned != email:
-                raise RegistrationBlocked("Confirmed email does not match the requested account. No record written.")
-            # Only a verified success screen + matching email can create a CSV.
-            env = dict(os.environ)
-            # Local interactive mode can collect the email without putting it in
-            # the environment. Pass the validated value only to the receipt writer.
-            env["REGISTRATION_EMAIL"] = email
-            env["CONFIRMED_EMAIL"] = returned
-            subprocess.run(["node", "scripts/record-firefox.mjs"], check=True, env=env)
+            record_confirmed_state(state, email)
             return
 
         elapsed = time.monotonic() - started
@@ -299,7 +316,9 @@ def await_confirmation(driver, email: str) -> None:
     )
 
 
-def run(*, interactive: bool = False) -> None:
+def run(*, interactive: bool = False, auto_resume: bool = False) -> None:
+    if auto_resume and not interactive:
+        raise RegistrationBlocked("--auto-resume requires --interactive on a local desktop.")
     if interactive and (os.getenv("GITHUB_ACTIONS", "").lower() == "true" or not sys.stdin.isatty()):
         raise RegistrationBlocked(
             "Manual verification requires a local interactive terminal and visible Firefox; "
@@ -367,14 +386,26 @@ def run(*, interactive: bool = False) -> None:
             text_fields[1].send_keys(Keys.TAB)
             time.sleep(2)
             if interactive:
-                print(
-                    "FIREFOX_MANUAL_VERIFICATION_READY: Firefox is open with the signup form. "
-                    "Use that Firefox window to click Create Account and complete any verification "
-                    "yourself. Do not close the browser."
-                )
-                input("After RoboForm shows the account-created success screen, press Enter here to verify: ")
-                print("FIREFOX_MANUAL_VERIFICATION_CHECK: checking RoboForm success screen.")
-                await_confirmation(driver, email)
+                if auto_resume:
+                    submit = find_submit_button(driver)
+                    if submit is not None and submit.is_enabled():
+                        submit.click()
+                        print("FIREFOX_SIGNUP_SUBMITTED: waiting for official confirmation.")
+                    else:
+                        print(
+                            "FIREFOX_SIGNUP_NEEDS_OPERATOR: Create Account is unavailable. "
+                            "Complete the form and verification in Firefox, then submit there."
+                        )
+                    monitor_manual_completion(driver, email)
+                else:
+                    print(
+                        "FIREFOX_MANUAL_VERIFICATION_READY: Firefox is open with the signup form. "
+                        "Use that Firefox window to click Create Account and complete any verification "
+                        "yourself. Do not close the browser."
+                    )
+                    input("After RoboForm shows the account-created success screen, press Enter here to verify: ")
+                    print("FIREFOX_MANUAL_VERIFICATION_CHECK: checking RoboForm success screen.")
+                    await_confirmation(driver, email)
                 print("FIREFOX_SIGNUP_CONFIRMED: RoboForm success screen verified and registration recorded.")
                 return
             submit = find_submit_button(driver)
@@ -402,9 +433,13 @@ if __name__ == "__main__":
         "--interactive", action="store_true",
         help="Open visible local Firefox for a human to complete verification and submit the signup."
     )
+    parser.add_argument(
+        "--auto-resume", action="store_true",
+        help="In local interactive mode, submit once when ready and watch for verified success without an Enter prompt."
+    )
     arguments = parser.parse_args()
     try:
-        run(interactive=arguments.interactive)
+        run(interactive=arguments.interactive, auto_resume=arguments.auto_resume)
     except (EOFError, KeyboardInterrupt):
         print("REGISTRATION_NOT_CONFIRMED_FIREFOX: local interactive session cancelled.")
         raise SystemExit(1) from None
