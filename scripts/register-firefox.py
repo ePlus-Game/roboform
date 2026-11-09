@@ -202,10 +202,14 @@ def capture_verification_image(driver, output: Path = Path("dist/firefox-verific
                     ".verify-human-code-image canvas",
                     "img.verify-human-code-image",
                     "svg.verify-human-code-image",
+                    ".verify-human-code-image",
                 )
                 for selector in selectors:
                     for element in driver.find_elements(By.CSS_SELECTOR, selector):
                         if not element.is_displayed():
+                            continue
+                        # A container is safe only when it has no form controls.
+                        if element.find_elements(By.CSS_SELECTOR, "input, textarea, button, select"):
                             continue
                         output.parent.mkdir(parents=True, exist_ok=True)
                         if element.screenshot(str(output)):
