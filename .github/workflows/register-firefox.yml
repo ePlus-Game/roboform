@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: write
+  issues: write # Temporary human CAPTCHA review Issue (no new PAT required)
 
 # Prevent two separate browser workflows from racing to write the same CSV.
 concurrency:
@@ -75,11 +76,15 @@ jobs:
           sudo apt-get install -y --no-install-recommends tesseract-ocr
       - name: Test source and records
         run: |
-          python -m py_compile scripts/firefox_support.py scripts/register-firefox.py scripts/analyze-verification-image.py
+          python -m py_compile scripts/firefox_support.py scripts/register-firefox.py scripts/analyze-verification-image.py scripts/github_captcha_review.py
+          python -m unittest discover -s test -p 'test_register_firefox.py' -v
+          python -m unittest discover -s test -p 'test_github_captcha_review.py' -v
           npm test
       - name: Register through official RoboForm Firefox extension
         env:
           FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
+          GITHUB_TOKEN: ${{ github.token }}
+          ROBOFORM_GITHUB_CAPTCHA_REVIEW: 'true'
         run: python scripts/register-firefox.py
       - name: Upload original PNG verification screenshot (no ZIP)
         if: ${{ failure() }}
