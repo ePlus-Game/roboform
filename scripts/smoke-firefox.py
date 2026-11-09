@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 from zipfile import ZipFile
 
 from selenium import webdriver
+from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -99,7 +100,10 @@ def main() -> None:
         if binary := os.getenv("FIREFOX_BINARY"):
             options.binary_location = binary
         # No RoboForm credentials or private user data are passed into Firefox.
-        driver = webdriver.Firefox(options=options)
+        # GeckoDriver 0.37+ requires this for Firefox extension UI testing.
+        # Safe only in this isolated CI job: no account secrets are provided.
+        service = Service(service_args=["--allow-system-access"])
+        driver = webdriver.Firefox(options=options, service=service)
         driver.set_page_load_timeout(45)
         try:
             addon_id = driver.install_addon(str(xpi), temporary=True)
@@ -113,7 +117,28 @@ def main() -> None:
             if not uuid:
                 print("FIREFOX_LIMITATION: installed XPI but cannot resolve internal moz-extension origin")
                 return
-            driver.get(f"moz-extension://{uuid}/start-page.html")
+            target = f"moz-extension://{uuid}/start-page.html"
+            # Firefox 153+ blocks direct WebDriver GET for privileged URLs.
+            # Open the extension's own page via Firefox's browser UI context
+            # with a system principal, then return to normal web context.
+            existing = set(driver.window_handles)
+            driver.set_context(driver.CONTEXT_CHROME)
+            try:
+                driver.execute_script("""
+                    const win = Services.wm.getMostRecentWindow("navigator:browser");
+                    if (!win || !win.gBrowser) throw new Error("Firefox browser window not found");
+                    const tab = win.gBrowser.addTab(arguments[0], {
+                        triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()
+                    });
+                    win.gBrowser.selectedTab = tab;
+                """, target)
+            finally:
+                driver.set_context(driver.CONTEXT_CONTENT)
+            WebDriverWait(driver, 15).until(
+                lambda d: len(set(d.window_handles) - existing) > 0
+            )
+            new_handles = list(set(driver.window_handles) - existing)
+            driver.switch_to.window(new_handles[0])
             body = WebDriverWait(driver, 20).until(
                 lambda d: d.find_element(By.TAG_NAME, "body").text
             )
