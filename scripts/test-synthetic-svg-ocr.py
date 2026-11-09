@@ -31,7 +31,7 @@ def main() -> None:
             text=True,
             timeout=30,
         )
-        observed = re.sub(r"\\s+", " ", result.stdout).strip().upper()
+        observed = re.sub(r"\s+", " ", result.stdout).strip().upper()
         print("OCR_SAMPLE: synthetic, non-CAPTCHA SVG (text element)")
         print("OCR_EXPECTED:", EXPECTED)
         print("OCR_OBSERVED:", observed)
