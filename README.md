@@ -92,6 +92,9 @@ References: [RoboForm signup help](https://help.roboform.com/hc/en-us/articles/1
 
 ## Standalone Tesseract OCR smoke test
 
-The optional [Tesseract OCR smoke workflow](.github/workflows/tesseract-ocr-smoke.yml) runs entirely in GitHub Actions and checks a **locally generated ordinary SVG text sample** with expected content `HELLO 2026`. It renders that SVG into PNG with CairoSVG, invokes Tesseract, and fails on any recognition mismatch. No third-party website, RoboForm account, secret, HAR, CAPTCHA sample, or actual registration is involved.
+The optional [Tesseract OCR smoke workflow](.github/workflows/tesseract-ocr-smoke.yml) runs entirely in GitHub Actions and performs **two separate offline OCR checks**:
 
-This is a baseline test of the OCR toolchain only: passing does **not** demonstrate the ability to solve RoboForm's image-code human verification. The real signup workflows retain their existing safety checks and require manual completion of security challenges.
+1. A generated plain-text SVG with known text `HELLO 2026`; the test fails if Tesseract misreads this baseline.
+2. The exact **user-provided `Untitled.svg`** stored as [`test/fixtures/user-provided-ocr.svg`](test/fixtures/user-provided-ocr.svg), with five path glyphs and no embedded text labels. CairoSVG renders it, Pillow composites it onto white and enlarges it 6×, and Tesseract's raw result is printed as `OCR_USER_IMAGE_OUTPUT`. There is no known ground-truth label, so this second observation does not fail based on text mismatch.
+
+No login, network submission, RoboForm browser automation, HAR file, password or registration takes place. This standalone OCR experiment does **not** automate RoboForm human verification. The signup workflows retain their existing protection and require manual completion of security challenges.
