@@ -425,7 +425,7 @@ def inspect_ddddocr_hint(image: Path = Path("dist/firefox-verification-image.png
                     print(line)
             elif line.startswith("FIREFOX_DDDDOCR_RECOGNIZED_TEXT:"):
                 match = re.fullmatch(
-                    r"FIREFOX_DDDDOCR_RECOGNIZED_TEXT: ([A-Za-z0-9]{1,12}) \\(unverified\\)",
+                    r"FIREFOX_DDDDOCR_RECOGNIZED_TEXT: ([A-Za-z0-9]{1,12}) \(unverified\)",
                     line,
                 )
                 if match:
