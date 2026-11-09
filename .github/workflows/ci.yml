@@ -20,6 +20,11 @@ jobs:
           package-manager-cache: false
       - run: npm install --no-audit --no-fund
       - run: npm test
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Check Firefox registration Python syntax
+        run: python -m py_compile scripts/firefox_support.py scripts/register-firefox.py
 
   smoke-extension:
     runs-on: ubuntu-24.04
