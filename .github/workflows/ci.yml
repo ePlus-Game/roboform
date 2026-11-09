@@ -12,10 +12,12 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '26'
+          node-version-file: '.nvmrc'
+          check-latest: true
+          package-manager-cache: false
       - run: npm install --no-audit --no-fund
       - run: npm test
 
@@ -23,10 +25,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '26'
+          node-version-file: '.nvmrc'
+          check-latest: true
+          package-manager-cache: false
       - run: npm install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - name: Load official RoboForm extension and locate Sign Up UI (no submission)
