@@ -24,7 +24,7 @@ def main() -> None:
         driver = webdriver.Firefox(options=options, service=service)
         driver.set_page_load_timeout(45)
         try:
-            addon_id = driver.install_addon(str(xpi), temporary=True)
+            addon_id = driver.install_web_extension(str(xpi), permanent=False).id
             if not addon_id:
                 raise RuntimeError("Firefox did not report a loaded RoboForm extension")
             print("FIREFOX_ADDON_INSTALLED: Selenium loaded official RoboForm XPI")
