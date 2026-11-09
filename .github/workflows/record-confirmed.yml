@@ -1,38 +1,55 @@
-name: Log RoboForm registration email
+name: Register RoboForm account (Playwright)
 
 on:
   workflow_dispatch:
     inputs:
       email:
-        description: Email to add to the registration tracking log
-        type: string
+        description: Email for a new RoboForm account
         required: true
+        type: string
+      full_name:
+        description: Full name for the account
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: roboform-registration-records
+  group: roboform-registration
   cancel-in-progress: false
 
 jobs:
-  record:
+  signup:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      REGISTRATION_EMAIL: ${{ inputs.email }}
+      REGISTRATION_FULL_NAME: ${{ inputs.full_name }}
+      ROBOFORM_MASTER_PASSWORD: ${{ secrets.ROBOFORM_MASTER_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - name: Record email without manual confirmation
-        env:
-          REGISTRATION_EMAIL: ${{ inputs.email }}
-        run: node scripts/record-confirmed.mjs
-      - name: Persist tracking log
+          node-version: '26'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run tests
+        run: npm test
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Install RoboForm, submit signup, require success confirmation
+        run: npm run register
+      - name: Commit verified registration only
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/registrations.csv
-          git commit -m "data: log RoboForm email (unverified)"
+          if git diff --cached --quiet; then
+            echo "No newly verified signup receipt generated."
+            exit 1
+          fi
+          git commit -m "data: record verified RoboForm signup"
           git push origin HEAD:main
