@@ -67,28 +67,28 @@ def download_signed_addon(path: Path) -> tuple[str, set[str]]:
 
 
 def discover_uuid(driver, addon_id: str) -> str | None:
-    # Firefox exposes the internal runtime origin on its debugging page.
-    # It is a browser-specific, non-sensitive identifier, never a login token.
-    driver.get("about:debugging#/runtime/this-firefox")
-    for _ in range(10):
-        time.sleep(1)
-        source = driver.page_source
-        uuids = MOZ_URL.findall(source)
-        if len(set(uuids)) == 1 and "RoboForm" in source:
-            return uuids[0]
-
-    # Firefox also maintains a runtime ID-to-UUID mapping in its profile.
+    # Firefox WebDriver forbids navigation to about:debugging. Inspect only
+    # the isolated ephemeral browser profile for its public extension UUID.
+    # Never read or log cookies, storage files or authentication values.
     profile = driver.capabilities.get("moz:profile", "")
+    if not profile:
+        return None
     pref_path = Path(profile) / "prefs.js"
-    if pref_path.is_file():
+    for _ in range(8):
+        time.sleep(1)
+        if not pref_path.is_file():
+            continue
         raw = pref_path.read_text(encoding="utf-8", errors="replace")
-        match = re.search(r'user_pref\\("extensions\\.webextensions\\.uuids", (".*?")\\);', raw)
+        match = re.search(r'user_pref\("extensions\.webextensions\.uuids", (".*?")\);', raw)
         if match:
-            uuids = json.loads(json.loads(match.group(1)))
-            if isinstance(uuids, dict):
-                return uuids.get(addon_id)
+            try:
+                mapping = json.loads(json.loads(match.group(1)))
+                if isinstance(mapping, dict) and addon_id in mapping:
+                    return mapping[addon_id]
+            except (ValueError, TypeError):
+                pass
+    print("FIREFOX_LIMITATION: Firefox WebDriver does not expose the runtime extension UUID")
     return None
-
 
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="rf-firefox-") as tmp:
