@@ -192,6 +192,45 @@ class RegistrationGuards(unittest.TestCase):
             self.assertIn("analyze-verification-image.py", args[1])
             self.assertNotIn("REGISTRATION_EMAIL", str(args))
 
+    def test_optional_ddddocr_hint_is_sanitized_from_subprocess(self):
+        from types import SimpleNamespace
+        with patch.object(
+            registration.subprocess, "run",
+            return_value=SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "FIREFOX_DDDDOCR_STATUS: unverified-suggestion\n"
+                    "FIREFOX_DDDDOCR_RECOGNIZED_TEXT: CLOUD7 (unverified)\n"
+                    "FIREFOX_DDDDOCR_CONFIDENCE: N/A\n"
+                ),
+            ),
+        ) as process:
+            with patch("builtins.print"):
+                self.assertEqual(
+                    registration.inspect_ddddocr_hint(Path("dist/test.png")),
+                    "CLOUD7",
+                )
+            args = process.call_args.args[0]
+            self.assertEqual(args[1], "scripts/ddddocr-hint.py")
+            self.assertEqual(args[2], "dist/test.png")
+            self.assertEqual(process.call_args.kwargs["timeout"], 40)
+            self.assertNotIn("REGISTRATION_EMAIL", str(process.call_args.kwargs["env"]))
+
+    def test_ddddocr_unavailable_never_blocks_tesseract(self):
+        from types import SimpleNamespace
+        with patch.object(
+            registration.subprocess, "run",
+            return_value=SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "FIREFOX_DDDDOCR_STATUS: unavailable\n"
+                    "FIREFOX_DDDDOCR_RECOGNIZED_TEXT: [unavailable] (unverified)\n"
+                ),
+            ),
+        ):
+            with patch("builtins.print"):
+                self.assertIsNone(registration.inspect_ddddocr_hint())
+
     def test_security_widget_detection(self):
         class FakeDriver:
             def __init__(self, elements):
