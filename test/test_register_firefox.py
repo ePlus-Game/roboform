@@ -6,7 +6,8 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -141,6 +142,50 @@ class RegistrationGuards(unittest.TestCase):
             self.assertEqual(args[-1], str(image))
             self.assertIn("analyze-verification-image.py", args[1])
             self.assertNotIn("REGISTRATION_EMAIL", str(args))
+
+    def test_manual_mode_rejects_hosted_actions_and_no_terminal(self):
+        with patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}, clear=True), \
+             patch.object(registration.sys, "stdin", SimpleNamespace(isatty=lambda: True)):
+            with self.assertRaisesRegex(registration.RegistrationBlocked, "local interactive terminal"):
+                registration.run(interactive=True)
+        with patch.dict(os.environ, {}, clear=True), \
+             patch.object(registration.sys, "stdin", SimpleNamespace(isatty=lambda: False)):
+            with self.assertRaisesRegex(registration.RegistrationBlocked, "local interactive terminal"):
+                registration.run(interactive=True)
+
+    def test_manual_mode_requires_explicit_privacy_consent(self):
+        with patch.dict(os.environ, {}, clear=True), \
+             patch.object(registration.sys, "stdin", SimpleNamespace(isatty=lambda: True)), \
+             patch("builtins.input", return_value="no"), \
+             patch.object(registration.webdriver, "Firefox") as browser:
+            with self.assertRaisesRegex(registration.RegistrationBlocked, "consent"):
+                registration.run(interactive=True)
+            browser.assert_not_called()
+
+    def test_manual_mode_waits_for_operator_and_checks_confirmed_screen(self):
+        driver = MagicMock()
+        driver.install_web_extension.return_value.id = "signed-addon-id"
+        fields = [MagicMock(), MagicMock()]
+        passwords = [MagicMock(), MagicMock()]
+        with patch.dict(os.environ, {}, clear=True), \
+             patch.object(registration.sys, "stdin", SimpleNamespace(isatty=lambda: True)), \
+             patch("builtins.input", side_effect=["yes", "test@example.com", ""]), \
+             patch.object(registration.getpass, "getpass", return_value="strong-password-123456") as secret_prompt, \
+             patch.object(registration, "download_signed_addon", return_value=("9.x", {"start-page.html"})), \
+             patch.object(registration.webdriver, "Firefox", return_value=driver) as browser, \
+             patch.object(registration, "open_roboform_start_page"), \
+             patch.object(registration, "body_text", return_value="Sign Up"), \
+             patch.object(registration, "enter_signup_form"), \
+             patch.object(registration, "visible_controls", side_effect=[fields, passwords]), \
+             patch.object(registration, "find_submit_button") as automated_submit, \
+             patch.object(registration, "await_confirmation") as confirm, \
+             patch.object(registration.time, "sleep"):
+            registration.run(interactive=True)
+            secret_prompt.assert_called_once()
+            automated_submit.assert_not_called()
+            confirm.assert_called_once_with(driver, "test@example.com")
+            self.assertNotIn("-headless", browser.call_args.kwargs["options"].arguments)
+            driver.quit.assert_called_once()
 
     def test_security_widget_detection(self):
         class FakeDriver:
