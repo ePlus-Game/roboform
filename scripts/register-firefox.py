@@ -252,7 +252,7 @@ def run() -> None:
         driver = webdriver.Firefox(options=opts, service=service)
         driver.set_page_load_timeout(45)
         try:
-            addon_id = driver.install_addon(str(xpi), temporary=True)
+            addon_id = driver.install_web_extension(str(xpi), permanent=False).id
             if not addon_id:
                 raise RegistrationBlocked("Firefox failed to install official RoboForm add-on.")
             open_roboform_start_page(driver, addon_id)
