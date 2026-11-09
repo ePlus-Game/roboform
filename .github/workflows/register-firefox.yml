@@ -13,10 +13,10 @@ on:
         default: David Nguyen
         type: string
       privacy_consent:
-        description: I reviewed RoboForm's Firefox Privacy agreement and agree to its data processing
+        description: Agree to RoboForm Firefox Privacy terms (uncheck to decline)
         required: true
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
