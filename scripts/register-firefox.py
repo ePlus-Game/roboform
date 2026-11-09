@@ -425,6 +425,7 @@ def await_confirmation(driver, email: str) -> None:
                     from github_captcha_review import GithubCaptchaReview, ReviewUnavailable
 
                     reviewer = None
+                    review_status = "manual verification not completed"
                     try:
                         inspect_verification_field_selectors(driver)
                         image = Path("dist/firefox-verification-image.png")
@@ -441,11 +442,12 @@ def await_confirmation(driver, email: str) -> None:
                         field.clear()
                         field.send_keys(code)
                         field.send_keys(Keys.ENTER)
-                        reviewer.finish("human-provided code entered")
+                        review_status = "human-provided code entered; awaiting RoboForm confirmation"
                     except ReviewUnavailable as exc:
-                        if reviewer is not None:
-                            reviewer.finish("review unavailable or timed out")
                         raise RegistrationBlocked(str(exc)) from None
+                    finally:
+                        if reviewer is not None:
+                            reviewer.finish(review_status)
                     announced = True
                     submitted_at = time.monotonic()
                 elif submitted_at is not None and time.monotonic() - submitted_at >= 20:
