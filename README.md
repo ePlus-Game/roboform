@@ -1,27 +1,31 @@
 # RoboForm account registration research
 
-Private project for reviewing RoboForm signup and recording **user-confirmed** registrations.
+Private project for reviewing RoboForm signup and logging email addresses entered through GitHub Actions.
 
-## What the extension actually does
+## Extension findings
 
-The supplied RoboForm Password Manager extension archive was v10.0.2.0 (Chrome ID `pnlccmojcmeohlpggmfnbbiapkmbliob`). Its `start-page.html` and bundled `1.js` implement Create Account using an email address, master password, password confirmation, and first/last name. It can show `Account created successfully` with the registered email.
+The supplied RoboForm Password Manager archive was v10.0.2.0 (Chrome extension ID `pnlccmojcmeohlpggmfnbbiapkmbliob`). Its signup UI accepts an email address, Master Password, confirmation, and name, and can display `Account created successfully` after the signup succeeds.
 
-Official RoboForm documentation also notes CAPTCHA/security checks during signup. A GitHub-hosted headless runner cannot reliably finish those interactive steps, and an unconfirmed form submission must **never** be reported as a successful account registration.
+Official RoboForm guidance requires completing a security check/CAPTCHA when creating an account. This repository's current GitHub Action does **not** automate the signup itself.
 
 ## Available GitHub Action
 
-**Actions → Record confirmed RoboForm signup → Run workflow**
+Go to **Actions → Log RoboForm registration email → Run workflow** and enter only the `email` input.
 
-1. Register a new personal account through the official RoboForm extension, including any human verification.
-2. Only **after** the extension explicitly displays the account creation success screen, enter the email into the workflow.
-3. Type `I CONFIRM` to certify that you saw the confirmation. This is a **manual attestation**, not independent verification by GitHub.
-4. The workflow saves a UTC timestamp and the current registration-recording date in `Asia/Ho_Chi_Minh` to `data/registrations.csv`, then commits the record to `main`.
-5. Duplicate emails and unconfirmed entries are rejected. This workflow has no schedule and never attempts CAPTCHA bypass.
+The workflow records that email along with the current UTC timestamp and date in `Asia/Ho_Chi_Minh` to `data/registrations.csv`, then commits the tracking log to `main`.
 
-**Important:** This workflow does not fill or submit the signup form and does not automatically create accounts. The logged timestamp is when you recorded the confirmed registration, not an independently proven server-side account creation time. No passwords or tokens are stored in the repository.
+**No confirmation input is required.** The previous `I CONFIRM` manual attestation has been removed.
+
+### Tracking semantics
+
+- All newly added entries have `verification_method=unverified`. They are **not proof of successful RoboForm registration**.
+- For backward compatibility, the CSV still uses the existing column names `registered_at_utc` and `registered_date_vn`. In new `unverified` rows, these fields mean **the time/date the email was logged**, *not* the confirmed creation date of a RoboForm account.
+- Duplicate email addresses and invalid input are rejected.
+- No password or token is stored in the tracking file.
+- The workflow has no schedule and does not attempt any CAPTCHA bypass.
 
 ## Development
 
-Run `node --test test/record.test.mjs` for local checks. GitHub Actions CI runs the same test suite on pull requests and main.
+Run `node --test test/record.test.mjs` for local tests. CI runs on pull requests and main.
 
-For future fully unattended registration, RoboForm would have to provide a supported registration/provisioning API or flow that does not require interactive human verification. For RoboForm Business, its officially documented admin onboarding / identity provider provisioning may be a better integration route.
+If the goal is unattended **account creation**, this project still needs a supported RoboForm provisioning flow or a legitimate interactive security verification process; removing an attestation field does not complete signup.
