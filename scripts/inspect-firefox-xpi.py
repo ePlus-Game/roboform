@@ -67,6 +67,20 @@ def main():
                 source = archive.read(info).decode("utf-8", "replace")
                 total_files += 1
                 scanned_bytes += info.file_size
+                # Read-only, bounded component audit to identify nearby form-control
+                # structure in the official extension. Do not print runtime form data.
+                if name == "1.js":
+                    for marker in ("verify-human-code-image", "question-text question-", "verify-human-code-refresh"):
+                        positions = list(re.finditer(re.escape(marker), source))[:3]
+                        for match in positions:
+                            excerpt = re.sub(
+                                r"\\s+", " ",
+                                source[max(0, match.start() - 250):match.end() + 750]
+                            )[:1050]
+                            print("XPI_QUESTION_COMPONENT", json.dumps({
+                                "marker": marker,
+                                "excerpt": excerpt,
+                            }, ensure_ascii=False))
                 for key, regex in PATTERNS.items():
                     matches = list(re.finditer(regex, source, re.I))
                     if not matches:
