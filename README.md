@@ -37,6 +37,20 @@ To continue past Privacy in Firefox, use an interactive Firefox window with the 
 
 ## Current limitation: RoboForm human verification
 
+When Firefox reaches a visible `image-code` challenge, the registration
+script now attempts to capture **only the challenge image element** (never
+the entire browser window, page HTML, form inputs, credentials or network
+requests). If capture succeeds, the failed GitHub Actions job uploads
+`firefox-verification-image-<run-id>` as a restricted repository artifact
+with **1-day retention** for manual review. A missing image artifact means
+that no isolated image element could be captured, not that verification
+succeeded. These diagnostics do **not** solve or submit an active CAPTCHA,
+and no registration is recorded without a verified success screen.
+
+Static OCR fixture exercises remain in the separate
+`tesseract-ocr-smoke.yml` workflow; they no longer run ahead of real
+Firefox registration, where they were misleading and added startup time.
+
 The actual GitHub Actions registration job may **not** be able to create an account unattended. In the live registration run on 2026-11-09, all four form inputs passed basic HTML validity checks, but the **Create Account** button remained disabled. A no-submission smoke test confirmed the presence of RoboForm's **Cloudflare Turnstile** human-verification widget. This is a deliberate interactive security requirement; this workflow does **not** attempt to bypass it.
 
 When Turnstile blocks submission, the registration job fails immediately with an explicit error and **does not** write `data/registrations.csv`. A passing smoke test validates the extension UI and challenge detection, **not** successful account creation.
