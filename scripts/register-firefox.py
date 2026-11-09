@@ -113,26 +113,114 @@ def find_submit_button(driver):
     return None
 
 
-def await_confirmation(driver, email: str) -> None:
+def inspect_post_submit(driver) -> dict:
+    """Inspect all browser tabs; never collect or log values, URLs or page HTML.
+
+    The Firefox add-on may display a challenge in a different tab/window.
+    Log only whitelisted UI states so Master Password and tokens stay private.
+    """
+    state = {
+        "windows": 0,
+        "signup_form_visible": False,
+        "success_screen": False,
+        "challenge": "none",
+        "visible_errors": 0,
+        "submit_enabled": False,
+        "confirmed_email": None,
+    }
     try:
-        confirmation = WebDriverWait(driver, 90).until(lambda d: next(
-            (e for e in d.find_elements(By.CSS_SELECTOR, ".account-confirmation .credentials-section .email")
-             if e.is_displayed()), None
-        ))
-    except Exception as error:
-        if human_verification_present(driver):
-            raise RegistrationBlocked("RoboForm requires a human security challenge after submission. No account was recorded.") from error
-        raise RegistrationBlocked("RoboForm did not show its confirmed account creation screen. No record written.") from error
-    returned = normalize_email(confirmation.text)
-    if returned != email:
-        raise RegistrationBlocked("Confirmed email does not match the requested account. No record written.")
-    success = driver.find_elements(By.CSS_SELECTOR, ".account-confirmation .done-message .text")
-    if not any(e.is_displayed() and "Account created successfully" in e.text for e in success):
-        raise RegistrationBlocked("RoboForm confirmation did not include the expected success message.")
-    # Only a confirmed browser response allows a verified CSV record.
-    env = dict(os.environ)
-    env["CONFIRMED_EMAIL"] = returned
-    subprocess.run(["node", "scripts/record-firefox.mjs"], check=True, env=env)
+        original = driver.current_window_handle
+    except Exception:
+        original = None
+    priority = {"none": 0, "unknown-verification": 1, "image-code": 2,
+                "recaptcha": 3, "turnstile": 4}
+    selectors = (
+        ("turnstile", ".verify-human-cloudflare-turnstile-v0, .cf-turnstile, iframe[src*='challenges.cloudflare.com'], iframe[src*='turnstile']"),
+        ("recaptcha", ".verify-human-google-recaptcha-v2, .g-recaptcha, iframe[src*='recaptcha']"),
+        ("image-code", ".verify-human-code-image, .verify-human-captcha, iframe[src*='captcha']"),
+        ("unknown-verification", ".questions-view .verify-human, .captcha-container"),
+    )
+    handles = list(driver.window_handles)
+    state["windows"] = len(handles)
+    try:
+        for handle in handles:
+            try:
+                driver.switch_to.window(handle)
+                def visible(selector):
+                    return [e for e in driver.find_elements(By.CSS_SELECTOR, selector)
+                            if e.is_displayed()]
+
+                state["signup_form_visible"] |= bool(visible(".create-new-account"))
+                for kind, selector in selectors:
+                    if visible(selector) and priority[kind] > priority[state["challenge"]]:
+                        state["challenge"] = kind
+
+                errors = visible(".error-text:not(.hidden), .error-balloon:not(.hidden), [role='alert']")
+                state["visible_errors"] += sum(bool(e.text.strip()) for e in errors)
+                for button in visible("button, input[type=button], input[type=submit]"):
+                    label = (button.get_attribute("value") or button.text or "").strip()
+                    if label.casefold() == "create account" and button.is_enabled():
+                        state["submit_enabled"] = True
+
+                # Confirmation is valid only when BOTH title and email are visible
+                # in the same window. Never log the email itself.
+                titles = visible(".account-confirmation .done-message .text")
+                addresses = visible(".account-confirmation .credentials-section .email")
+                if titles and addresses and any(
+                    "Account created successfully" in item.text for item in titles
+                ):
+                    state["success_screen"] = True
+                    state["confirmed_email"] = addresses[0].text.strip()
+                    break
+            except Exception:
+                # A popup may close while enumerating; inspect remaining windows.
+                continue
+    finally:
+        if original and original in driver.window_handles:
+            driver.switch_to.window(original)
+    return state
+
+
+def sanitized_post_submit_state(state: dict) -> dict:
+    return {key: value for key, value in state.items() if key != "confirmed_email"}
+
+
+def await_confirmation(driver, email: str) -> None:
+    started = time.monotonic()
+    state = None
+    while time.monotonic() - started < 90:
+        state = inspect_post_submit(driver)
+        if state["success_screen"]:
+            returned = normalize_email(state["confirmed_email"])
+            if returned != email:
+                raise RegistrationBlocked("Confirmed email does not match the requested account. No record written.")
+            # Only a verified success screen + matching email can create a CSV.
+            env = dict(os.environ)
+            env["CONFIRMED_EMAIL"] = returned
+            subprocess.run(["node", "scripts/record-firefox.mjs"], check=True, env=env)
+            return
+
+        elapsed = time.monotonic() - started
+        if elapsed >= 5 and state["challenge"] != "none":
+            print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
+            raise RegistrationBlocked(
+                "RoboForm displayed " + state["challenge"] +
+                " human verification after Create Account. A person must complete "
+                "this challenge in the official interactive browser; no record was written."
+            )
+        if elapsed >= 8 and state["visible_errors"] > 0:
+            print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
+            raise RegistrationBlocked(
+                "RoboForm displayed a validation/server error after Create Account. "
+                "The message was intentionally not copied into CI logs to protect account data; no record written."
+            )
+        time.sleep(1)
+
+    print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state or {}))
+    raise RegistrationBlocked(
+        "RoboForm did not show the verified success screen in any Firefox window "
+        "within 90 seconds. Inspect the sanitized UI state above; no record written."
+    )
 
 
 def run() -> None:
