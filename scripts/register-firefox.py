@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -234,10 +235,14 @@ def capture_verification_image(driver, output: Path = Path("dist/firefox-verific
 def inspect_captured_verification_image(image: Path = Path("dist/firefox-verification-image.png")) -> None:
     """Run the current image through the read-only OCR diagnostics."""
     try:
+        safe_env = {key: os.environ[key] for key in (
+            "PATH", "HOME", "LANG", "GITHUB_STEP_SUMMARY"
+        ) if key in os.environ}
         completed = subprocess.run(
-            ["python", "scripts/analyze-verification-image.py", str(image)],
+            [sys.executable, "scripts/analyze-verification-image.py", str(image)],
             check=False,
             timeout=25,
+            env=safe_env,
         )
         if completed.returncode:
             print("FIREFOX_IMAGE_CODE_OCR_FAILED: image inspection unsuccessful.")
