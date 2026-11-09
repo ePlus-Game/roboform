@@ -9,11 +9,25 @@ permissions:
   contents: read
 
 jobs:
-  tests:
+  test:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - run: node --test test/record.test.mjs
+          node-version: '26'
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+
+  smoke-extension:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Load official RoboForm extension and locate Sign Up UI (no submission)
+        run: npm run smoke
