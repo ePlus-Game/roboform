@@ -1,4 +1,4 @@
-name: Register RoboForm account (Playwright)
+name: Register RoboForm account — Chromium (Playwright)
 
 on:
   workflow_dispatch:

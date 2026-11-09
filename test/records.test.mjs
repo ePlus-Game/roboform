@@ -29,3 +29,13 @@ test('records confirmed signup and upgrades old unverified email', async () => {
 test('rejects invalid CRX packages without loading any code', () => {
   assert.throws(() => crxZipPayload(Buffer.from('garbage')));
 });
+
+
+test('records verified Firefox signup with distinct source, never accepts arbitrary method', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'rf-firefox-record-'));
+  const file = join(dir, 'registrations.csv');
+  await recordVerified(file, 'firefox@example.com', new Date('2026-11-09T04:00:00.000Z'), 'firefox_signup_ui_success');
+  assert.equal((await loadRecords(file))[0].status, 'firefox_signup_ui_success');
+  await assert.rejects(recordVerified(file, 'other@example.com', new Date(), 'unverified'));
+  assert.equal((await loadRecords(file)).length, 1);
+});

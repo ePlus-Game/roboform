@@ -1,0 +1,89 @@
+name: Register RoboForm account — Firefox (Selenium)
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: Email for a new RoboForm account
+        required: true
+        type: string
+      full_name:
+        description: Full name for the account
+        required: false
+        default: David Nguyen
+        type: string
+      privacy_consent:
+        description: I reviewed RoboForm's Firefox Privacy agreement and agree to its data processing
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Prevent two separate browser workflows from racing to write the same CSV.
+concurrency:
+  group: roboform-registration
+  cancel-in-progress: false
+
+jobs:
+  signup-firefox:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      REGISTRATION_EMAIL: ${{ inputs.email }}
+      REGISTRATION_FULL_NAME: ${{ inputs.full_name }}
+      FIREFOX_PRIVACY_CONSENT: ${{ inputs.privacy_consent }}
+      ROBOFORM_MASTER_PASSWORD: ${{ secrets.ROBOFORM_MASTER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Validate required inputs (never print credentials)
+        shell: bash
+        run: |
+          if [[ "$FIREFOX_PRIVACY_CONSENT" != "true" ]]; then
+            echo "::error title=Privacy consent required::Review the RoboForm Firefox Privacy agreement and select the consent checkbox to proceed."
+            exit 1
+          fi
+          if [[ -z "${ROBOFORM_MASTER_PASSWORD//[[:space:]]/}" ]]; then
+            echo "::error title=Missing master password::Configure the ROBOFORM_MASTER_PASSWORD repository secret."
+            exit 1
+          fi
+          if (( ${#ROBOFORM_MASTER_PASSWORD} < 16 )); then
+            echo "::error title=Master password too short::Update the repository secret to a unique password of at least 16 characters."
+            exit 1
+          fi
+          echo "Privacy authorization and password configuration validated; values are not logged."
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Firefox
+        id: firefox
+        uses: browser-actions/setup-firefox@v1
+        with:
+          firefox-version: latest
+      - name: Install Selenium
+        run: python -m pip install 'selenium>=4.30,<5'
+      - name: Test source and records
+        run: |
+          python -m py_compile scripts/firefox_support.py scripts/register-firefox.py
+          npm test
+      - name: Register through official RoboForm Firefox extension
+        env:
+          FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
+        run: python scripts/register-firefox.py
+      - name: Commit verified Firefox registration only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/registrations.csv
+          if git diff --cached --quiet; then
+            echo "No newly verified Firefox signup receipt generated."
+            exit 1
+          fi
+          git commit -m "data: record verified RoboForm Firefox signup"
+          git push origin HEAD:main
