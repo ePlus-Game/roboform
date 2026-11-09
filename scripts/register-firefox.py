@@ -181,6 +181,46 @@ def inspect_post_submit(driver) -> dict:
     return state
 
 
+def capture_verification_image(driver, output: Path = Path("dist/firefox-verification-image.png")) -> bool:
+    """Save only the displayed image challenge for authorized manual review.
+
+    Do not capture browser pages, form inputs, passwords, cookies, network
+    traffic, CAPTCHA responses, or authentication tokens.
+    """
+    try:
+        original = driver.current_window_handle
+    except Exception:
+        original = None
+    try:
+        for handle in list(driver.window_handles):
+            try:
+                driver.switch_to.window(handle)
+                # Prefer the image itself; never screenshot a containing form.
+                selectors = (
+                    ".verify-human-code-image svg",
+                    ".verify-human-code-image img",
+                    ".verify-human-code-image canvas",
+                    "img.verify-human-code-image",
+                    "svg.verify-human-code-image",
+                )
+                for selector in selectors:
+                    for element in driver.find_elements(By.CSS_SELECTOR, selector):
+                        if not element.is_displayed():
+                            continue
+                        output.parent.mkdir(parents=True, exist_ok=True)
+                        if element.screenshot(str(output)):
+                            print("FIREFOX_VERIFICATION_IMAGE_CAPTURED: image-only artifact for human review.")
+                            return True
+            except Exception:
+                # The challenge window may close or the image may be unavailable.
+                continue
+    finally:
+        if original and original in driver.window_handles:
+            driver.switch_to.window(original)
+    print("FIREFOX_VERIFICATION_IMAGE_UNAVAILABLE: no visible image element.")
+    return False
+
+
 def sanitized_post_submit_state(state: dict) -> dict:
     return {key: value for key, value in state.items() if key != "confirmed_email"}
 
@@ -202,6 +242,8 @@ def await_confirmation(driver, email: str) -> None:
 
         elapsed = time.monotonic() - started
         if elapsed >= 5 and state["challenge"] != "none":
+            if state["challenge"] == "image-code":
+                capture_verification_image(driver)
             print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
             raise RegistrationBlocked(
                 "RoboForm displayed " + state["challenge"] +
