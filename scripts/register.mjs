@@ -61,7 +61,7 @@ async function run() {
         .allTextContents().catch(() => []);
       const concise = errors.map(t => t.trim()).filter(Boolean).join('; ').slice(0, 500)
         .replaceAll(secret, '[REDACTED]');
-      if (challenge) throw new Error('CAPTCHA/security challenge requires a human. No bypass was attempted.');
+      if (challenge) throw new Error('CAPTCHA/security challenge requires a human.');
       throw new Error('No verified success screen. Possible security check / OTP / signup error.' +
         (concise ? ` UI says: ${concise}` : ''));
     }
