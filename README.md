@@ -12,6 +12,16 @@
 
 **Use a distinct Master Password for each account.** If you register another email, change the secret first. The workflow handles one account per manually triggered run; no schedules or automatic retries.
 
+### Troubleshooting: master password validation
+
+The workflow now checks the configured secret **before** installing dependencies or Playwright, without printing the secret value.
+
+- **Missing or blank**: check that the repository secret is named exactly `ROBOFORM_MASTER_PASSWORD` in **Settings → Secrets and variables → Actions → Repository secrets**. This workflow uses a repository secret (not an environment secret).
+- **Shorter than 16 characters**: click the pencil icon next to the existing repository secret and replace its **value** with a unique 16+ character master password. GitHub shows the secret name, not its saved value or length.
+- After updating a secret, trigger a **new Run workflow** from `main`; inspect the **Validate RoboForm master password** step. The password value is never logged.
+
+If the preflight passes, later signup errors concern browser registration or RoboForm verification, not this secret-length check.
+
 ## What actually happens
 
 - GitHub Actions runs **Node.js 26 LTS** and Playwright's Chromium, not a fake CSV logger.
