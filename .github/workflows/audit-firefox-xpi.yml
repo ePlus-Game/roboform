@@ -1,0 +1,25 @@
+name: Audit RoboForm Firefox XPI (read-only)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/audit-firefox-xpi.yml'
+      - 'scripts/inspect-firefox-xpi.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependency for existing Firefox XPI downloader
+        run: python -m pip install 'selenium>=4.30,<5'
+      - name: Inspect official XPI (no secrets or registration)
+        run: python scripts/inspect-firefox-xpi.py
