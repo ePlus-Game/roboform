@@ -231,6 +231,20 @@ def capture_verification_image(driver, output: Path = Path("dist/firefox-verific
     return False
 
 
+def inspect_captured_verification_image(image: Path = Path("dist/firefox-verification-image.png")) -> None:
+    """Run the current image through the read-only OCR diagnostics."""
+    try:
+        completed = subprocess.run(
+            ["python", "scripts/analyze-verification-image.py", str(image)],
+            check=False,
+            timeout=25,
+        )
+        if completed.returncode:
+            print("FIREFOX_IMAGE_CODE_OCR_FAILED: image inspection unsuccessful.")
+    except (OSError, subprocess.TimeoutExpired):
+        print("FIREFOX_IMAGE_CODE_OCR_FAILED: image inspection unavailable.")
+
+
 def sanitized_post_submit_state(state: dict) -> dict:
     return {key: value for key, value in state.items() if key != "confirmed_email"}
 
@@ -253,7 +267,8 @@ def await_confirmation(driver, email: str) -> None:
         elapsed = time.monotonic() - started
         if elapsed >= 5 and state["challenge"] != "none":
             if state["challenge"] == "image-code":
-                capture_verification_image(driver)
+                if capture_verification_image(driver):
+                    inspect_captured_verification_image()
             print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
             raise RegistrationBlocked(
                 "RoboForm displayed " + state["challenge"] +
