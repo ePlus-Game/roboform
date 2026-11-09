@@ -4,9 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { installExtension, EXTENSION_ID } from './install-extension.mjs';
 import { openSignupForm, getSignupSubmissionGate } from './signup-ui.mjs';
-import { normalizeEmail, loadRecords, alreadyVerified, recordVerified } from '../lib/records.mjs';
+import { normalizeEmail, alreadyVerified, recordVerified } from '../lib/records.mjs';
+import { registrationFileForEmail, loadAllRegistrations } from '../lib/registration-email.mjs';
 
-const csvFile = 'data/registrations.csv';
+const csvFile = registrationFileForEmail(process.env.REGISTRATION_EMAIL);
 const email = normalizeEmail(process.env.REGISTRATION_EMAIL);
 const fullName = (process.env.REGISTRATION_FULL_NAME || 'RoboForm User').trim();
 const secret = process.env.ROBOFORM_MASTER_PASSWORD || '';
@@ -20,7 +21,7 @@ async function run() {
     throw new Error('Invalid full name.');
   if (!secret.trim()) throw new Error('ROBOFORM_MASTER_PASSWORD is missing or blank. Check repository Actions secrets.');
   if (secret.length < 16) throw new Error('ROBOFORM_MASTER_PASSWORD was supplied but is shorter than 16 characters. Update the repository secret.');
-  const rows = await loadRecords(csvFile);
+  const rows = await loadAllRegistrations();
   if (alreadyVerified(rows, email)) throw new Error('Email already has a verified registration record; no retry attempted.');
 
   const extensionDir = await installExtension();
