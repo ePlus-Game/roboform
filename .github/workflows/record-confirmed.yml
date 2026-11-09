@@ -29,12 +29,14 @@ jobs:
       REGISTRATION_FULL_NAME: ${{ inputs.full_name }}
       ROBOFORM_MASTER_PASSWORD: ${{ secrets.ROBOFORM_MASTER_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '26'
+          node-version-file: '.nvmrc'
+          check-latest: true
+          package-manager-cache: false
       - name: Validate RoboForm master password
         shell: bash
         run: |
