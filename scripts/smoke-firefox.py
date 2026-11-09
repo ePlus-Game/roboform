@@ -150,6 +150,13 @@ def main() -> None:
             if "Sign Up" in body or "Create Account" in body:
                 print("FIREFOX_SIGNUP_UI_READY: official extension signup entrypoint is available")
             elif "Privacy" in body and "your consent is required" in body:
+                labels = []
+                for control in driver.find_elements(By.CSS_SELECTOR, "button, input[type=button], input[type=submit], a, [role=button]"):
+                    if control.is_displayed():
+                        label = (control.get_attribute("aria-label") or control.get_attribute("value") or control.text or "").strip()[:60]
+                        if label:
+                            labels.append(label)
+                print("FIREFOX_PRIVACY_CONTROLS:", json.dumps(labels[:15]))
                 print("FIREFOX_PRIVACY_CONSENT_REQUIRED: RoboForm Firefox onboarding requires user acceptance before signup. The smoke test does not accept privacy terms on the user's behalf.")
             else:
                 print("FIREFOX_LIMITATION: extension startup UI not recognized; check onboarding in an interactive Firefox session")
