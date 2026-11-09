@@ -73,7 +73,8 @@ async function run() {
       throw new Error('RoboForm did not display the expected success message.');
     const receipt = await recordVerified(csvFile, email);
     console.log(`SIGNUP_CONFIRMED: ${receipt.email} at ${receipt.utc} (${receipt.vn} Vietnam).`);
-    await summary(`### RoboForm signup confirmed\n\nEmail: ${receipt.email}\n\nUTC: ${receipt.utc}\n\nVietnam date: ${receipt.vn}`);
+    console.log(`TRIAL_ESTIMATED: 30 days from ${receipt.trialStartUtc} to ${receipt.trialEndUtc} UTC (not provider-confirmed).`);
+    await summary(`### RoboForm signup confirmed\n\nEmail: ${receipt.email}\n\nUTC: ${receipt.utc}\n\nVietnam date: ${receipt.vn}\n\nEstimated 30-day trial end (UTC): ${receipt.trialEndUtc}\n\nConfirm actual trial entitlement and expiration in RoboForm.`);
   } finally {
     if (context) await context.close();
     await rm(profile, { recursive: true, force: true });
