@@ -189,6 +189,88 @@ class RegistrationGuards(unittest.TestCase):
             self.assertNotIn("-headless", browser.call_args.kwargs["options"].arguments)
             driver.quit.assert_called_once()
 
+    def test_auto_resume_requires_local_interactive_mode(self):
+        with self.assertRaisesRegex(registration.RegistrationBlocked, "requires --interactive"):
+            registration.run(auto_resume=True)
+
+    def test_auto_resume_submits_once_and_does_not_prompt_for_enter(self):
+        driver = MagicMock()
+        driver.install_web_extension.return_value.id = "signed-addon-id"
+        fields = [MagicMock(), MagicMock()]
+        passwords = [MagicMock(), MagicMock()]
+        submit = MagicMock()
+        submit.is_enabled.return_value = True
+        with patch.dict(os.environ, {}, clear=True), \
+             patch.object(registration.sys, "stdin", SimpleNamespace(isatty=lambda: True)), \
+             patch("builtins.input", side_effect=["yes", "test@example.com"]) as prompt, \
+             patch.object(registration.getpass, "getpass", return_value="strong-password-123456"), \
+             patch.object(registration, "download_signed_addon", return_value=("9.x", {"start-page.html"})), \
+             patch.object(registration.webdriver, "Firefox", return_value=driver), \
+             patch.object(registration, "open_roboform_start_page"), \
+             patch.object(registration, "body_text", return_value="Sign Up"), \
+             patch.object(registration, "enter_signup_form"), \
+             patch.object(registration, "visible_controls", side_effect=[fields, passwords]), \
+             patch.object(registration, "find_submit_button", return_value=submit), \
+             patch.object(registration, "monitor_manual_completion") as monitor, \
+             patch.object(registration.time, "sleep"):
+            registration.run(interactive=True, auto_resume=True)
+            self.assertEqual(prompt.call_count, 2)
+            submit.click.assert_called_once()
+            monitor.assert_called_once_with(driver, "test@example.com")
+            driver.quit.assert_called_once()
+
+    def test_auto_resume_when_submit_disabled_does_not_force_submission(self):
+        driver = MagicMock()
+        driver.install_web_extension.return_value.id = "signed-addon-id"
+        submit = MagicMock()
+        submit.is_enabled.return_value = False
+        with patch.dict(os.environ, {}, clear=True), \
+             patch.object(registration.sys, "stdin", SimpleNamespace(isatty=lambda: True)), \
+             patch("builtins.input", side_effect=["yes", "test@example.com"]), \
+             patch.object(registration.getpass, "getpass", return_value="strong-password-123456"), \
+             patch.object(registration, "download_signed_addon", return_value=("9.x", {"start-page.html"})), \
+             patch.object(registration.webdriver, "Firefox", return_value=driver), \
+             patch.object(registration, "open_roboform_start_page"), \
+             patch.object(registration, "body_text", return_value="Sign Up"), \
+             patch.object(registration, "enter_signup_form"), \
+             patch.object(registration, "visible_controls", side_effect=[
+                 [MagicMock(), MagicMock()], [MagicMock(), MagicMock()]]), \
+             patch.object(registration, "find_submit_button", return_value=submit), \
+             patch.object(registration, "monitor_manual_completion") as monitor, \
+             patch.object(registration.time, "sleep"):
+            registration.run(interactive=True, auto_resume=True)
+            submit.click.assert_not_called()
+            monitor.assert_called_once_with(driver, "test@example.com")
+
+    def test_auto_resume_waits_for_human_verification_before_recording(self):
+        challenge = {"success_screen": False, "challenge": "image-code"}
+        success = {"success_screen": True, "confirmed_email": "test@example.com"}
+        with patch.object(registration.time, "monotonic", side_effect=[0, 0, 1, 2]), \
+             patch.object(registration.time, "sleep"), \
+             patch.object(registration, "inspect_post_submit", side_effect=[challenge, challenge, success]), \
+             patch.object(registration, "record_confirmed_state") as record, \
+             patch.object(registration, "capture_verification_image") as capture:
+            registration.monitor_manual_completion(object(), "test@example.com")
+            record.assert_called_once_with(success, "test@example.com")
+            capture.assert_not_called()
+
+    def test_auto_resume_timeout_does_not_write_record(self):
+        with patch.object(registration.time, "monotonic", side_effect=[0, 301]), \
+             patch.object(registration, "record_confirmed_state") as record:
+            with self.assertRaisesRegex(registration.RegistrationBlocked, "timed out"):
+                registration.monitor_manual_completion(object(), "test@example.com")
+            record.assert_not_called()
+
+    def test_confirmation_record_rejects_missing_or_wrong_success_email(self):
+        with patch.object(registration.subprocess, "run") as writer:
+            for state in (
+                {"success_screen": False, "confirmed_email": "test@example.com"},
+                {"success_screen": True, "confirmed_email": "wrong@example.com"}
+            ):
+                with self.assertRaises(registration.RegistrationBlocked):
+                    registration.record_confirmed_state(state, "test@example.com")
+            writer.assert_not_called()
+
     def test_security_widget_detection(self):
         class FakeDriver:
             def __init__(self, elements):
