@@ -1,14 +1,10 @@
-name: Record confirmed RoboForm signup
+name: Log RoboForm registration email
 
 on:
   workflow_dispatch:
     inputs:
       email:
-        description: Email used for registration
-        type: string
-        required: true
-      confirmation:
-        description: Type I CONFIRM only AFTER RoboForm shows account created successfully
+        description: Email to add to the registration tracking log
         type: string
         required: true
 
@@ -29,15 +25,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Record a personally verified registration
+      - name: Record email without manual confirmation
         env:
           REGISTRATION_EMAIL: ${{ inputs.email }}
-          USER_CONFIRMATION: ${{ inputs.confirmation }}
         run: node scripts/record-confirmed.mjs
-      - name: Persist log
+      - name: Persist tracking log
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/registrations.csv
-          git commit -m "data: record user-confirmed RoboForm registration"
+          git commit -m "data: log RoboForm email (unverified)"
           git push origin HEAD:main
