@@ -1,0 +1,49 @@
+name: Compare OCR engines on synthetic labeled text (offline)
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/benchmark-ocr-engines.py'
+      - 'test/test_benchmark_ocr_engines.py'
+      - '.github/workflows/benchmark-ocr-engines.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install system OCR and fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends tesseract-ocr fonts-dejavu-core
+      - name: Install pinned OCR engines and CPU dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'ddddocr==1.6.1' 'rapidocr>=3.10.0,<4' 'onnxruntime>=1.20,<2' 'Pillow>=11,<13' 'numpy<3'
+          python -m pip check
+      - name: Run benchmark unit tests
+        run: |
+          python -m py_compile scripts/benchmark-ocr-engines.py
+          python -m unittest discover -s test -p 'test_benchmark_ocr_engines.py' -v
+      - name: Compare Tesseract, ddddocr and RapidOCR offline
+        run: python scripts/benchmark-ocr-engines.py
+      - name: Upload benchmark report (single JSON file, no ZIP)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/ocr-engine-benchmark/report.json
+          archive: false
+          if-no-files-found: warn
+          retention-days: 14
