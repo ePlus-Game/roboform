@@ -46,6 +46,43 @@ class RegistrationGuards(unittest.TestCase):
             finally:
                 os.chdir(original)
 
+    def test_receipt_only_after_matching_visible_success(self):
+        class Element:
+            def __init__(self, text):
+                self.text = text
+
+            def is_displayed(self):
+                return True
+
+        class FakeDriver:
+            def __init__(self, returned_email):
+                self.returned_email = returned_email
+
+            def find_elements(self, _by, selector):
+                if "credentials-section" in selector:
+                    return [Element(self.returned_email)]
+                if "done-message" in selector:
+                    return [Element("Account created successfully")]
+                return []
+
+        class FakeWait:
+            def __init__(self, driver, _timeout):
+                self.driver = driver
+
+            def until(self, predicate):
+                return predicate(self.driver)
+
+        with patch.object(registration, "WebDriverWait", FakeWait), patch.object(
+            registration.subprocess, "run"
+        ) as record:
+            with patch.dict(os.environ, {"REGISTRATION_EMAIL": "expected@example.com"}):
+                registration.await_confirmation(FakeDriver("expected@example.com"), "expected@example.com")
+                record.assert_called_once()
+                record.reset_mock()
+                with self.assertRaisesRegex(registration.RegistrationBlocked, "does not match"):
+                    registration.await_confirmation(FakeDriver("wrong@example.com"), "expected@example.com")
+                record.assert_not_called()
+
     def test_security_widget_detection(self):
         class FakeDriver:
             def __init__(self, elements):
