@@ -35,7 +35,7 @@ class VerificationImageDiagnosticsTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 diagnostic.dimensions(image)
 
-    def test_ocr_text_is_discarded_and_only_metrics_returned(self) -> None:
+    def test_confidence_metrics_include_only_valid_text_groups(self) -> None:
         tsv = (
             "level\tconf\ttext\n"
             "5\t70.5\tSECRET_A\n"
@@ -47,16 +47,24 @@ class VerificationImageDiagnosticsTest(unittest.TestCase):
         self.assertEqual(confidence, 75.5)
         self.assertEqual(diagnostic.confidence_metrics("level\tconf\ttext\n"), (0, None))
 
-    def test_analyze_never_returns_ocr_token(self) -> None:
+    def test_ocr_displays_bounded_text_for_manual_review(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             image = Path(directory) / "image.png"
             image.write_bytes(png_header(165, 50))
-            result = SimpleNamespace(returncode=0, stdout="level\tconf\ttext\n5\t99\tSECRET_TOKEN\n")
+            result = SimpleNamespace(returncode=0, stdout="level\tconf\ttext\n5\t99\tAB\n5\t85\t123\n")
             with patch.object(diagnostic.subprocess, "run", return_value=result) as mock_run:
-                width, height, count, score = diagnostic.analyze(image)
-            self.assertEqual((width, height, count, score), (165, 50, 1, 99.0))
-            self.assertNotIn("SECRET_TOKEN", repr((width, height, count, score)))
+                width, height, count, score, recognized = diagnostic.analyze(image)
+            self.assertEqual((width, height, count, score, recognized), (165, 50, 2, 92.0, "AB123"))
             self.assertEqual(mock_run.call_args.args[0][0], "tesseract")
+
+    def test_unexpected_ocr_output_is_not_logged(self) -> None:
+        bad = ("SECRET_TOKEN", "email@example.com", "ABCDEFGHIJKLM", "hello world", "<script>")
+        for value in bad:
+            with self.subTest(value=value):
+                tsv = f"level\tconf\ttext\n5\t99\t{value}\n"
+                self.assertIsNone(diagnostic.recognized_text(tsv))
+        self.assertIsNone(diagnostic.recognized_text("level\tconf\ttext\n"))
+        self.assertEqual(diagnostic.recognized_text("level\tconf\ttext\n5\t80\tQ7b9\n"), "Q7b9")
 
 
 if __name__ == "__main__":
