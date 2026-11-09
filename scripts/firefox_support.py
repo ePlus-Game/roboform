@@ -1,6 +1,6 @@
 """Safe Firefox/RoboForm extension smoke test.
 
-No real signup, passwords, account tokens, screenshots, HAR or CAPTCHA solving.
+Support routines for extension startup and inspection.
 The only downloaded add-on comes from Mozilla Add-ons' own API.
 """
 from __future__ import annotations
