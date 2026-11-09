@@ -42,6 +42,21 @@ try {
       .filter(e => e.getClientRects().length).map(e => e.textContent?.trim()).filter(Boolean).slice(0, 4)
   }));
   console.log('SMOKE_FORM_VALIDATION:', JSON.stringify(state));
+  // The smoke browser contains synthetic values only. Capture limited UI text
+  // without input values, credentials, DOM dumps, screenshots or full URLs.
+  const hints = await page.evaluate(() => ({
+    visibleText: (document.body?.innerText || '').slice(0, 1800),
+    buttons: [...document.querySelectorAll('button')].filter(e => e.getClientRects().length).map(e => ({
+      text: e.textContent?.trim().slice(0, 70), disabled: e.disabled,
+      type: e.type, title: e.title
+    })).slice(0, 15),
+    frameCount: document.querySelectorAll('iframe').length,
+    frameTitles: [...document.querySelectorAll('iframe')].map(e => e.title?.slice(0, 80)).slice(0, 10),
+    securityElements: [...document.querySelectorAll('[class], [id]')].filter(e =>
+      /captcha|challenge|turnstile|recaptcha|verify|security/i.test(e.className?.toString() + ' ' + e.id))
+      .slice(0, 12).map(e => ({tag: e.tagName, id: e.id, className: e.className?.toString().slice(0, 100)}))
+  }));
+  console.log('SMOKE_UI_HINTS:', JSON.stringify(hints));
   if (!state.submitEnabled) throw new Error('Create Account stays disabled after filling synthetic valid-looking data; check local validation / required agreements before real signup.');
   console.log('Smoke PASS: signup form can enable Create Account with synthetic data.');
   console.log('No personal data was submitted or account created during this smoke test.');
