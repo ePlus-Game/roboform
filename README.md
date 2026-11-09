@@ -27,6 +27,16 @@ The command asks for Privacy consent, signup email and Master Password (entered 
 
 Selenium then checks that RoboForm's success screen displays the exact requested email. Only when both checks succeed does it append a record to `data/registrations.csv` **locally**. The command does **not** push the CSV to GitHub. If the screen is not verified, it records nothing. Keep the browser open until the terminal finishes; Ctrl+C cancels.
 
+### Optional auto-resume mode (local desktop only)
+
+```powershell
+python scripts/register-firefox.py --interactive --auto-resume
+```
+
+After filling the signup fields, this mode clicks **Create Account** once if the standard submit button is enabled. If verification appears, finish it yourself in the **visible Firefox window**; if needed, click Create Account there after the challenge. Selenium checks the official result once per second and **automatically** records only a verified success screen with the exact requested email. You do not need to return to PowerShell and press Enter. The mode stops after five minutes without a verified success and records nothing.
+
+This does **not** automatically solve, enter, or bypass any CAPTCHA. It is deliberately a local mode, not an unattended GitHub Actions registration workflow.
+
 The original `register-firefox.yml` GitHub Actions workflow remains headless and unchanged; it still stops if manual verification is required. Never put your Master Password in command-line arguments, the repository, or screenshots.
 
 ## Which browser is currently used?
