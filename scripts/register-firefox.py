@@ -358,8 +358,9 @@ def capture_verification_image(driver, output: Path = Path("dist/firefox-verific
     return False
 
 
-def inspect_captured_verification_image(image: Path = Path("dist/firefox-verification-image.png")) -> None:
-    """Run the current image through the read-only OCR diagnostics."""
+def inspect_captured_verification_image(image: Path = Path("dist/firefox-verification-image.png")) -> tuple[str | None, str]:
+    """Read-only OCR diagnostics. Returns an unverified hint for human review."""
+    suggestion, confidence = None, "N/A"
     try:
         safe_env = {key: os.environ[key] for key in (
             "PATH", "HOME", "LANG", "GITHUB_STEP_SUMMARY"
@@ -369,11 +370,28 @@ def inspect_captured_verification_image(image: Path = Path("dist/firefox-verific
             check=False,
             timeout=25,
             env=safe_env,
+            capture_output=True,
+            text=True,
         )
         if completed.returncode:
             print("FIREFOX_IMAGE_CODE_OCR_FAILED: image inspection unsuccessful.")
+        for line in (getattr(completed, "stdout", "") or "").splitlines():
+            if line.startswith("FIREFOX_OCR_READONLY:"):
+                print(line)
+                match = re.search(r"mean_confidence=(N/A|\d{1,3}(?:\.\d{1,2})?)", line)
+                if match:
+                    confidence = match.group(1)
+            elif line.startswith("FIREFOX_OCR_RECOGNIZED_TEXT:"):
+                print(line)
+                match = re.fullmatch(
+                    r"FIREFOX_OCR_RECOGNIZED_TEXT: ([A-Za-z0-9]{1,12}) \(unverified\)",
+                    line,
+                )
+                if match:
+                    suggestion = match.group(1)
     except (OSError, subprocess.TimeoutExpired):
         print("FIREFOX_IMAGE_CODE_OCR_FAILED: image inspection unavailable.")
+    return suggestion, confidence
 
 
 def sanitized_post_submit_state(state: dict) -> dict:
@@ -382,8 +400,10 @@ def sanitized_post_submit_state(state: dict) -> dict:
 
 def await_confirmation(driver, email: str) -> None:
     manual = manual_verification_enabled()
-    timeout = manual_timeout_seconds() if manual else 90
+    github_review = os.getenv("ROBOFORM_GITHUB_CAPTCHA_REVIEW", "").lower() == "true"
+    timeout = manual_timeout_seconds() if manual else (540 if github_review else 90)
     announced = False
+    submitted_at = None
     started = time.monotonic()
     state = None
     while time.monotonic() - started < timeout:
@@ -400,6 +420,43 @@ def await_confirmation(driver, email: str) -> None:
 
         elapsed = time.monotonic() - started
         if elapsed >= 5 and state["challenge"] != "none":
+            if github_review and state["challenge"] == "image-code":
+                if not announced:
+                    from github_captcha_review import GithubCaptchaReview, ReviewUnavailable
+
+                    reviewer = None
+                    review_status = "manual verification not completed"
+                    try:
+                        inspect_verification_field_selectors(driver)
+                        image = Path("dist/firefox-verification-image.png")
+                        if not capture_verification_image(driver, image):
+                            raise ReviewUnavailable("Verification image could not be captured.")
+                        hint, confidence = inspect_captured_verification_image(image)
+                        reviewer = GithubCaptchaReview()
+                        reviewer.publish(image, hint, confidence)
+                        # The OCR hint is NEVER used as the form value.
+                        code = reviewer.wait_for_answer(420)
+                        if not focus_manual_verification_input(driver):
+                            raise ReviewUnavailable("Unique verification input was not found.")
+                        field = driver.switch_to.active_element
+                        field.clear()
+                        field.send_keys(code)
+                        field.send_keys(Keys.ENTER)
+                        review_status = "human-provided code entered; awaiting RoboForm confirmation"
+                    except ReviewUnavailable as exc:
+                        raise RegistrationBlocked(str(exc)) from None
+                    finally:
+                        if reviewer is not None:
+                            reviewer.finish(review_status)
+                    announced = True
+                    submitted_at = time.monotonic()
+                elif submitted_at is not None and time.monotonic() - submitted_at >= 20:
+                    raise RegistrationBlocked(
+                        "RoboForm still requires verification after the human-entered code. "
+                        "No account was confirmed or recorded."
+                    )
+                time.sleep(1)
+                continue
             if state["challenge"] == "image-code" and not (manual and announced):
                 inspect_verification_field_selectors(driver)
                 if capture_verification_image(driver):
