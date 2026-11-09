@@ -41,8 +41,6 @@ async function run() {
     await passFields.nth(1).fill(secret);
     await textFields.nth(1).fill(fullName);
     await textFields.nth(1).blur();
-    // The Create Account button is gated by a Cloudflare Turnstile widget
-    // in RoboForm 10.0.2.0. Never attempt to bypass human verification.
     await page.waitForTimeout(1500);
     const gate = await getSignupSubmissionGate(page);
     if (!gate.enabled) {
