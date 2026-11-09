@@ -81,14 +81,25 @@ jobs:
         env:
           FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
         run: python scripts/register-firefox.py
-      - name: Upload image-only verification evidence
+      - name: Upload original PNG verification screenshot (no ZIP)
         if: ${{ failure() }}
+        id: verification_png
         uses: actions/upload-artifact@v7
         with:
-          name: firefox-verification-image-${{ github.run_id }}
+          # v7 supports direct, non-archived single-file uploads.
+          # The artifact name becomes firefox-verification-image.png.
           path: dist/firefox-verification-image.png
+          archive: false
           if-no-files-found: ignore
-          retention-days: 1
+          retention-days: 7
+      - name: Link original verification PNG in workflow summary
+        if: ${{ failure() && steps.verification_png.outputs.artifact-url != '' }}
+        env:
+          IMAGE_URL: ${{ steps.verification_png.outputs.artifact-url }}
+        run: |
+          echo "### Firefox verification screenshot (original PNG)" >> "$GITHUB_STEP_SUMMARY"
+          echo "[View or download PNG directly](${IMAGE_URL})" >> "$GITHUB_STEP_SUMMARY"
+          echo "Image captured by Selenium without post-processing; stored without ZIP compression." >> "$GITHUB_STEP_SUMMARY"
       - name: Commit verified Firefox registration only
         run: |
           git config user.name "github-actions[bot]"
