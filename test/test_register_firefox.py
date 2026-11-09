@@ -128,8 +128,8 @@ class RegistrationGuards(unittest.TestCase):
                 self.selector = selector
                 return self.elements
 
-        self.assertFalse(registration.human_verification_present(FakeDriver([])))
-        self.assertTrue(registration.human_verification_present(FakeDriver([object()])))
+        self.assertFalse(registration.verification_present(FakeDriver([])))
+        self.assertTrue(registration.verification_present(FakeDriver([object()])))
 
 
 if __name__ == "__main__":
