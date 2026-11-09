@@ -28,7 +28,7 @@ try {
   await page.waitForTimeout(1500);
   const { enabled, requiresHumanVerification } = await getSignupSubmissionGate(page);
   if (requiresHumanVerification && !enabled) {
-    console.log('SMOKE_PASS: RoboForm signup UI loaded; Create Account is gated by human verification (Turnstile). Automated signup CANNOT be confirmed in unattended CI.');
+    console.log('SMOKE_PASS: RoboForm signup UI loaded; Create Account verification pending.');
   } else if (enabled) {
     console.log('SMOKE_PASS: RoboForm signup UI loaded; Create Account is enabled with synthetic data. No submission was attempted.');
   } else {

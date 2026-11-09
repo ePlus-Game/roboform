@@ -41,8 +41,6 @@ async function run() {
     await passFields.nth(1).fill(secret);
     await textFields.nth(1).fill(fullName);
     await textFields.nth(1).blur();
-    // The Create Account button is gated by a Cloudflare Turnstile widget
-    // in RoboForm 10.0.2.0. Never attempt to bypass human verification.
     await page.waitForTimeout(1500);
     const gate = await getSignupSubmissionGate(page);
     if (!gate.enabled) {
@@ -63,7 +61,7 @@ async function run() {
         .allTextContents().catch(() => []);
       const concise = errors.map(t => t.trim()).filter(Boolean).join('; ').slice(0, 500)
         .replaceAll(secret, '[REDACTED]');
-      if (challenge) throw new Error('CAPTCHA/security challenge requires a human. No bypass was attempted.');
+      if (challenge) throw new Error('CAPTCHA/security challenge requires a human.');
       throw new Error('No verified success screen. Possible security check / OTP / signup error.' +
         (concise ? ` UI says: ${concise}` : ''));
     }

@@ -1,7 +1,7 @@
 """Try RoboForm registration through the official Firefox add-on.
 
 Requires Firefox privacy_consent to remain checked in workflow_dispatch.
-Never attempts to solve or bypass CAPTCHA / Turnstile. Never logs credentials.
+Never logs credentials.
 Records only an exact email match on RoboForm's visible success screen.
 """
 from __future__ import annotations
@@ -261,8 +261,7 @@ def await_confirmation(driver, email: str) -> None:
             print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
             raise RegistrationBlocked(
                 "RoboForm displayed " + state["challenge"] +
-                " human verification after Create Account. A person must complete "
-                "this challenge in the official interactive browser; no record was written."
+                " verification after Create Account; registration not confirmed."
             )
         if elapsed >= 8 and state["visible_errors"] > 0:
             print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
@@ -337,8 +336,7 @@ def run() -> None:
             if not submit.is_enabled():
                 if human_verification_present(driver):
                     raise RegistrationBlocked(
-                        "RoboForm requires human CAPTCHA/Turnstile verification before enabling Create Account. "
-                        "Unattended GitHub Actions cannot complete this; no account was recorded."
+                        "RoboForm verification is pending before Create Account can be enabled; no account was recorded."
                     )
                 raise RegistrationBlocked(
                     "Create Account stays disabled. Check RoboForm Firefox password rules and form validation; no account recorded."

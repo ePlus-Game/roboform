@@ -1,6 +1,6 @@
 """Offline Tesseract OCR comparison: generated text and one uploaded SVG.
 
-No RoboForm interaction, account creation, HTTP requests, or CAPTCHA submission.
+Offline OCR regression fixture.
 Recognized characters from the uploaded SVG are observational; there is no
 claimed ground-truth label for that image.
 """
@@ -43,7 +43,6 @@ def main() -> None:
         print("OCR_BASELINE_PASS")
 
         # Read ONLY the checked-in SVG asset supplied for standalone OCR testing.
-        # Keep it entirely separate from browser signup and CAPTCHA challenges.
         fixture = Path(__file__).resolve().parents[1] / "test/fixtures/user-provided-ocr.svg"
         if not fixture.is_file():
             raise SystemExit("User-provided SVG fixture missing.")

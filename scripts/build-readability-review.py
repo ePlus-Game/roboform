@@ -168,7 +168,7 @@ def build(output: Path) -> None:
         raise ValueError("Offline HTML embedding failed")
     print(f"HUMAN_READABILITY_HTML_READY: {output}")
     print(f"HUMAN_READABILITY_FIXTURE_SHA256: {sha256}")
-    print("HUMAN_READABILITY_MODE: offline human survey; no signup and no OCR submission")
+    print("HUMAN_READABILITY_MODE: offline sample survey")
 
 
 if __name__ == "__main__":
