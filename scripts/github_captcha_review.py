@@ -91,7 +91,7 @@ class GithubCaptchaReview:
 
         url = f"https://raw.githubusercontent.com/{self.repo}/{PREVIEW_BRANCH}/{self.path}"
         run_url = f"https://github.com/{self.repo}/actions/runs/{self.run}"
-        hint = suggestion or "Không nhận dạng được"
+        hint = suggestion or ("OCR có phát hiện chữ nhưng kết quả bị lọc vì định dạng không hợp lệ" if confidence != "N/A" else "OCR không phát hiện được nhóm ký tự")
         body = (
             "## RoboForm Firefox — xác minh CAPTCHA thủ công\n\n"
             f"![Ảnh CAPTCHA thực tế]({url})\n\n"
