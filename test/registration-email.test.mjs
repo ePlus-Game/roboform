@@ -8,11 +8,11 @@ import {
   selectRegistrationEmail, registrationFileForEmail, loadAllRegistrations,
   GENERATED_EMAIL_DOMAIN
 } from '../lib/registration-email.mjs';
-import { CSV_HEADER, alreadyVerified } from '../lib/records.mjs';
+import { LEGACY_CSV_HEADER, alreadyVerified } from '../lib/records.mjs';
 
 const helper = resolve('scripts/select-registration-email.mjs');
 const recorder = resolve('scripts/record-firefox.mjs');
-const headers = CSV_HEADER + '\n';
+const headers = LEGACY_CSV_HEADER + '\n';
 
 async function workspace() {
   const dir = await mkdtemp(join(tmpdir(), 'rf-auto-email-'));
@@ -107,6 +107,9 @@ test('confirmed Firefox registration routes hoangnnm.tech to dedicated CSV only'
   });
   assert.equal(run.status, 0, run.stderr);
   assert.equal((await loadAllRegistrations([domain])).length, 1);
+  const records = await loadAllRegistrations([domain]);
+  assert.equal(records[0].trialStartUtc, records[0].utc);
+  assert.equal(Date.parse(records[0].trialEndUtc) - Date.parse(records[0].trialStartUtc), 30 * 86400000);
   assert.match(await readFile(domain, 'utf8'), /abc12345@hoangnnm\.tech/);
   assert.equal(await readFile(main, 'utf8'), headers);
 });
