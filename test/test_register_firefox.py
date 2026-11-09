@@ -40,9 +40,17 @@ class RegistrationGuards(unittest.TestCase):
                     "old@example.com,2026-11-09T00:00:00Z,2026-11-09,unverified\n",
                     encoding="utf-8",
                 )
+                Path("data/hoangnnm.csv").write_text(
+                    "email,registered_at_utc,registered_date_vn,verification_method\n"
+                    "taken@hoangnnm.tech,2026-11-09T00:00:00Z,2026-11-09,firefox_signup_ui_success\n",
+                    encoding="utf-8",
+                )
                 with self.assertRaisesRegex(registration.RegistrationBlocked, "already"):
                     registration.check_already_verified("confirmed@example.com")
+                with self.assertRaisesRegex(registration.RegistrationBlocked, "already"):
+                    registration.check_already_verified("taken@hoangnnm.tech")
                 registration.check_already_verified("old@example.com")
+                registration.check_already_verified("new@hoangnnm.tech")
             finally:
                 os.chdir(original)
 
