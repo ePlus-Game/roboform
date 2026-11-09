@@ -6,6 +6,10 @@ import { execFileSync } from 'node:child_process';
 
 export const EXTENSION_ID = 'pnlccmojcmeohlpggmfnbbiapkmbliob';
 const ABC = 'abcdefghijklmnop';
+// Public key from the supplied RoboForm 10.0.2.0 extension manifest.
+// Chrome Web Store strips manifest.key from its CRX, but Chromium needs it
+// to keep the same extension ID when loading the extracted directory.
+const ROBOFORM_PUBLIC_KEY = 'MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDAeBFO3sny3mtTlvQWOG2ijdmlg7yLpYWq6FvcoXkn2VMFM/r4I7Ko5gzxMekrF9fjljyuey4EDi68BboBSX8FoJogr6dBSmrJgc7ROZzyxMO0Fr2hZOFkswIslVbj2nQeSWq8EqFUUXO/Rt7NuRQijBk+q4qb/YUAhjbVtzDWmwIDAQAB';
 const toId = bytes => Array.from(bytes, byte => ABC[byte >> 4] + ABC[byte & 15]).join('');
 
 export function extensionIdFromKey(base64Key) {
@@ -95,8 +99,16 @@ export async function installExtension() {
   await mkdir(extensionDir);
   await writeFile(archive, zip);
   execFileSync('unzip', ['-q', '-o', archive, '-d', extensionDir], { timeout: 45_000 });
-  const manifest = JSON.parse(await readFile(join(extensionDir, 'manifest.json'), 'utf8'));
-  const fromKey = manifest.key ? extensionIdFromKey(manifest.key) : null;
+  const manifestPath = join(extensionDir, 'manifest.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  if (extensionIdFromKey(ROBOFORM_PUBLIC_KEY) !== EXTENSION_ID)
+    throw new Error('Bundled public key does not match expected RoboForm extension ID.');
+  if (!manifest.key) {
+    // Public key only: this is NOT a credential or private signing key.
+    manifest.key = ROBOFORM_PUBLIC_KEY;
+    await writeFile(manifestPath, JSON.stringify(manifest));
+  }
+  const fromKey = extensionIdFromKey(manifest.key);
   console.log(`Web Store RoboForm metadata: version=${manifest.version}, manifestV=${manifest.manifest_version}, hasKey=${!!manifest.key}, worker=${!!manifest.background?.service_worker}, crxId=${crxId}`);
   if ((fromKey && fromKey !== EXTENSION_ID) ||
       manifest.manifest_version !== 3 || !manifest.background?.service_worker) {
