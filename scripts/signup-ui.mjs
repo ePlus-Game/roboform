@@ -25,7 +25,6 @@ export async function openSignupForm(page) {
 
 
 // Inspect only the button and verification widget, never form field values.
-// Cloudflare Turnstile is a human verification gate; it must not be bypassed.
 export async function getSignupSubmissionGate(page) {
   const submit = page.getByRole('button', { name: 'Create Account', exact: true }).last();
   const enabled = await submit.isEnabled();
