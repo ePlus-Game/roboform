@@ -2,6 +2,16 @@
 
 Private project for reviewing RoboForm signup and logging email addresses entered through GitHub Actions.
 
+## Quick start — enter email
+
+[![Nhập email ngay](https://img.shields.io/badge/GitHub_Actions-Nh%E1%BA%ADp_email_ngay-238636?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml)
+
+**[Open the email entry workflow](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml)** (text link if the badge does not load).
+
+The button opens the repository's **Log RoboForm registration email** workflow directly. On that page click **Run workflow**, enter your **email**, then click **Run workflow** to submit. You must be signed into GitHub and have write access to the repository. GitHub's standard workflow page does not automatically expand the email input form from a README link.
+
+**Note:** This action logs an **unverified email**; it does not create or validate a RoboForm account.
+
 ## Extension findings
 
 The supplied RoboForm Password Manager archive was v10.0.2.0 (Chrome extension ID `pnlccmojcmeohlpggmfnbbiapkmbliob`). Its signup UI accepts an email address, Master Password, confirmation, and name, and can display `Account created successfully` after the signup succeeds.
