@@ -93,10 +93,10 @@ def main():
                             key=lambda m: m.start()
                         )
                         for item in input_tags[-15:]:
-                            left = max(0, item.start() - 110)
-                            right = min(len(nearby), item.end() + 270)
+                            left = max(0, item.start() - 1350)
+                            right = min(len(nearby), item.end() + 1100)
                             print("XPI_INPUT_ELEMENT", json.dumps({
-                                "excerpt": re.sub(r"\\s+", " ", nearby[left:right])[:380]
+                                "excerpt": re.sub(r"\\s+", " ", nearby[left:right])[:2600]
                             }, ensure_ascii=False))
                 for key, regex in PATTERNS.items():
                     matches = list(re.finditer(regex, source, re.I))
