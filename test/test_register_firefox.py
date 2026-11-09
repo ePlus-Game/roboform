@@ -57,24 +57,23 @@ class RegistrationGuards(unittest.TestCase):
         class FakeDriver:
             def __init__(self, returned_email):
                 self.returned_email = returned_email
+                self.window_handles = ["original", "confirmation"]
+                self.current_window_handle = "original"
+                self.switch_to = self
+
+            def window(self, handle):
+                self.current_window_handle = handle
 
             def find_elements(self, _by, selector):
+                if self.current_window_handle != "confirmation":
+                    return []
                 if "credentials-section" in selector:
                     return [Element(self.returned_email)]
                 if "done-message" in selector:
                     return [Element("Account created successfully")]
                 return []
 
-        class FakeWait:
-            def __init__(self, driver, _timeout):
-                self.driver = driver
-
-            def until(self, predicate):
-                return predicate(self.driver)
-
-        with patch.object(registration, "WebDriverWait", FakeWait), patch.object(
-            registration.subprocess, "run"
-        ) as record:
+        with patch.object(registration.subprocess, "run") as record:
             with patch.dict(os.environ, {"REGISTRATION_EMAIL": "expected@example.com"}):
                 registration.await_confirmation(FakeDriver("expected@example.com"), "expected@example.com")
                 record.assert_called_once()
@@ -82,6 +81,43 @@ class RegistrationGuards(unittest.TestCase):
                 with self.assertRaisesRegex(registration.RegistrationBlocked, "does not match"):
                     registration.await_confirmation(FakeDriver("wrong@example.com"), "expected@example.com")
                 record.assert_not_called()
+
+    def test_sanitized_state_never_includes_email_or_password(self):
+        state = {"windows": 1, "confirmed_email": "private@example.com",
+                 "challenge": "image-code", "visible_errors": 0}
+        safe = registration.sanitized_post_submit_state(state)
+        self.assertNotIn("confirmed_email", safe)
+        self.assertNotIn("private@example.com", str(safe))
+        self.assertEqual(safe["challenge"], "image-code")
+
+    def test_visible_verification_in_second_window(self):
+        class Element:
+            text = ""
+
+            def is_displayed(self):
+                return True
+
+        class FakeDriver:
+            window_handles = ["signup", "challenge"]
+            current_window_handle = "signup"
+
+            def __init__(self):
+                self.switch_to = self
+
+            def window(self, handle):
+                self.current_window_handle = handle
+
+            def find_elements(self, _by, selector):
+                if self.current_window_handle == "challenge" and ".verify-human-code-image" in selector:
+                    return [Element()]
+                return []
+
+        driver = FakeDriver()
+        state = registration.inspect_post_submit(driver)
+        self.assertEqual(state["windows"], 2)
+        self.assertEqual(state["challenge"], "image-code")
+        self.assertFalse(state["success_screen"])
+        self.assertEqual(driver.current_window_handle, "signup")
 
     def test_security_widget_detection(self):
         class FakeDriver:
