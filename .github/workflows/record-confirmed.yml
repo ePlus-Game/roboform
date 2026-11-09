@@ -35,6 +35,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '26'
+      - name: Validate RoboForm master password
+        shell: bash
+        run: |
+          if [[ -z "${ROBOFORM_MASTER_PASSWORD//[[:space:]]/}" ]]; then
+            echo "::error title=Missing master password::ROBOFORM_MASTER_PASSWORD was not supplied or is blank. Check Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          if (( ${#ROBOFORM_MASTER_PASSWORD} < 16 )); then
+            echo "::error title=Master password too short::ROBOFORM_MASTER_PASSWORD was supplied but contains fewer than 16 characters. Update the repository secret."
+            exit 1
+          fi
+          echo "Master password configuration validated (value not logged)."
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Run tests
