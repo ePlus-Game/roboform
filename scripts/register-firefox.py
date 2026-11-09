@@ -182,6 +182,47 @@ def inspect_post_submit(driver) -> dict:
     return state
 
 
+def inspect_verification_field_selectors(driver) -> list[dict]:
+    """Read only input structure near a live challenge, never input values."""
+    reported = []
+    original = None
+    try:
+        original = driver.current_window_handle
+        for handle in list(driver.window_handles):
+            driver.switch_to.window(handle)
+            for element in driver.find_elements(
+                By.CSS_SELECTOR,
+                ".questions-view input, .verify-human-captcha input, .captcha-container input",
+            ):
+                if not element.is_displayed():
+                    continue
+                kind = (element.get_attribute("type") or "text").lower()
+                if kind in ("password", "hidden"):
+                    continue
+                # Only report selector metadata, not values, HTML or page text.
+                details = {"type": kind}
+                for attribute in ("class", "id", "name"):
+                    raw = element.get_attribute(attribute) or ""
+                    if isinstance(raw, str):
+                        cleaned = raw.strip()
+                        if len(cleaned) <= 96 and re.fullmatch(r"[A-Za-z0-9_\- ]*", cleaned):
+                            details[attribute] = cleaned
+                if details not in reported:
+                    reported.append(details)
+                if len(reported) >= 12:
+                    break
+    except Exception:
+        print("FIREFOX_VERIFICATION_INPUT_PROBE_UNAVAILABLE: DOM read failed.")
+    finally:
+        try:
+            if original and original in driver.window_handles:
+                driver.switch_to.window(original)
+        except Exception:
+            pass
+    print("FIREFOX_VERIFICATION_INPUT_FIELDS:", reported)
+    return reported
+
+
 def capture_verification_image(driver, output: Path = Path("dist/firefox-verification-image.png")) -> bool:
     """Capture an isolated image element without surrounding form content."""
     try:
@@ -272,6 +313,7 @@ def await_confirmation(driver, email: str) -> None:
         elapsed = time.monotonic() - started
         if elapsed >= 5 and state["challenge"] != "none":
             if state["challenge"] == "image-code":
+                inspect_verification_field_selectors(driver)
                 if capture_verification_image(driver):
                     inspect_captured_verification_image()
             print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
