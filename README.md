@@ -18,10 +18,25 @@ use the same concurrency group to serialize registration attempts.
   stored in `data/hoangnnm.csv`.
 - Confirmed accounts at other domains stay in `data/registrations.csv`.
 - Neither CSV is updated unless RoboForm confirms the exact selected email.
+- Confirmed signups include `trial_started_at_utc` and `trial_ends_at_utc`
+  (estimated **30 days** after the verified signup timestamp).
+- These fields are **local estimates**: they do not query RoboForm's billing
+  or account entitlements. Verify the actual trial end in the RoboForm account.
+- Previously recorded rows have blank trial dates rather than a fabricated end date.
+- CSV is the source of truth; the GitHub Actions Job Summary is the readable report.
 - The generated address appears in the GitHub Actions log and Job Summary.
 - **Important:** Generating an address does not provision a mailbox. The
   `hoangnnm.tech` domain must support the address or catch-all forwarding
   if registration requires receiving confirmation emails.
+
+### GitHub Actions registration concurrency
+
+Both Firefox and Chromium registration workflows use the exact same
+`concurrency.group: roboform-registration` with `cancel-in-progress: false`,
+so only **one registration workflow runs at a time**. This does not serialize
+independent CI, smoke-test or audit workflows. GitHub Actions concurrency
+supports at most one pending run in a group; a newer pending run may replace
+an older pending run, so it is not a durable FIFO queue.
 
 ## Node.js version (CI and registration)
 
