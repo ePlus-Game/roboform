@@ -1,6 +1,6 @@
 """Try RoboForm registration through the official Firefox add-on.
 
-Requires explicit user privacy consent in workflow_dispatch.
+Requires Firefox privacy_consent to remain checked in workflow_dispatch.
 Never attempts to solve or bypass CAPTCHA / Turnstile. Never logs credentials.
 Records only an exact email match on RoboForm's visible success screen.
 """
@@ -138,7 +138,7 @@ def await_confirmation(driver, email: str) -> None:
 def run() -> None:
     if os.getenv("FIREFOX_PRIVACY_CONSENT", "").lower() != "true":
         raise RegistrationBlocked(
-            "Firefox Privacy consent is required. Review RoboForm's agreement and explicitly check the workflow consent option."
+            "Firefox Privacy consent is required. Review the agreement; keep the privacy_consent option checked if you agree."
         )
     email = normalize_email(os.getenv("REGISTRATION_EMAIL", ""))
     full_name = os.getenv("REGISTRATION_FULL_NAME", "David Nguyen").strip()
@@ -170,11 +170,11 @@ def run() -> None:
             open_roboform_start_page(driver, addon_id)
             body = body_text(driver)
             if "Privacy" in body and "your consent is required" in body:
-                # User supplied an explicit privacy-consent checkbox in the
-                # manually dispatched workflow. Never accept it implicitly.
+                # The manually dispatched workflow preselects privacy_consent.
+                # Respect the submitted value; a false value stops before launch.
                 if not click_exact_control(driver, "Accept"):
                     raise RegistrationBlocked("RoboForm Privacy agreement needs manual acceptance; Accept control was not found.")
-                print("FIREFOX_PRIVACY_ACCEPTED: only because workflow caller explicitly consented.")
+                print("FIREFOX_PRIVACY_ACCEPTED: workflow privacy_consent input was true.")
                 time.sleep(2)
             enter_signup_form(driver)
             text_fields = visible_controls(driver, "input[type=text], input[type=email]")
