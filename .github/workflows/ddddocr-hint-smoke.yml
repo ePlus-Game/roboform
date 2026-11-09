@@ -1,0 +1,47 @@
+name: ddddocr suggestion smoke (offline, no registration)
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/ddddocr-hint.py'
+      - 'scripts/register-firefox.py'
+      - 'scripts/github_captcha_review.py'
+      - 'test/test_ddddocr_hint.py'
+      - '.github/workflows/ddddocr-hint-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-hint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install local ddddocr model and Pillow
+        run: |
+          python -m pip install 'ddddocr==1.6.1' 'Pillow>=11,<13'
+          python -m pip check
+      - name: Check optional OCR unit tests
+        run: |
+          python -m py_compile scripts/ddddocr-hint.py scripts/register-firefox.py scripts/github_captcha_review.py
+          python -m unittest discover -s test -p 'test_ddddocr_hint.py' -v
+      - name: Verify local model inference on plain synthetic text
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageDraw, ImageFont
+          p = Path("dist")
+          p.mkdir(exist_ok=True)
+          im = Image.new("RGB", (240, 74), "white")
+          f = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36)
+          ImageDraw.Draw(im).text((14, 13), "HELLO", font=f, fill=(20, 25, 30))
+          im.save(p / "ddddocr-offline-plain-text.png")
+          PY
+          python scripts/ddddocr-hint.py dist/ddddocr-offline-plain-text.png | tee dist/ddddocr-smoke.log
+          grep -q '^FIREFOX_DDDDOCR_STATUS: unverified-suggestion' dist/ddddocr-smoke.log
+          grep -q '^FIREFOX_DDDDOCR_RECOGNIZED_TEXT: HELLO (unverified)' dist/ddddocr-smoke.log
