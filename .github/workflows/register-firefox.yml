@@ -29,7 +29,7 @@ concurrency:
 jobs:
   signup-firefox:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       REGISTRATION_EMAIL: ${{ inputs.email }}
       REGISTRATION_FULL_NAME: ${{ inputs.full_name }}
@@ -68,12 +68,24 @@ jobs:
         uses: browser-actions/setup-firefox@v1
         with:
           firefox-version: latest
-      - name: Install Selenium
-        run: python -m pip install 'selenium>=4.30,<5'
+      - name: Install Selenium and OCR Python dependencies
+        run: python -m pip install 'selenium>=4.30,<5' 'CairoSVG==2.8.2' 'Pillow==11.3.0'
+      - name: Install Tesseract OCR
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends tesseract-ocr fonts-dejavu-core
       - name: Test source and records
         run: |
           python -m py_compile scripts/firefox_support.py scripts/register-firefox.py
           npm test
+      # Preflight only: local image fixtures + local HTML form; never enters
+      # OCR output into RoboForm or submits any third-party human challenge.
+      - name: OCR SVG fixtures (local; no RoboForm)
+        run: python scripts/test-synthetic-svg-ocr.py
+      - name: OCR to Selenium Firefox form (local; no RoboForm)
+        env:
+          FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
+        run: python scripts/test-ocr-form-demo.py
       - name: Register through official RoboForm Firefox extension
         env:
           FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
