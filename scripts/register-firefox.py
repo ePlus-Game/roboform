@@ -38,13 +38,13 @@ def normalize_email(raw: str) -> str:
 
 
 def check_already_verified(email: str) -> None:
-    path = Path("data/registrations.csv")
-    if not path.exists():
-        return
-    with path.open(encoding="utf-8", newline="") as reader:
-        for row in csv.DictReader(reader):
-            if row.get("email", "").lower() == email and row.get("verification_method") != "unverified":
-                raise RegistrationBlocked("Email already has a verified registration record. No duplicate registration attempted.")
+    for path in (Path("data/registrations.csv"), Path("data/hoangnnm.csv")):
+        if not path.exists():
+            continue
+        with path.open(encoding="utf-8", newline="") as reader:
+            for row in csv.DictReader(reader):
+                if row.get("email", "").lower() == email and row.get("verification_method") != "unverified":
+                    raise RegistrationBlocked("Email already has a verified registration record. No duplicate registration attempted.")
 
 
 def visible_controls(driver, selector: str):
