@@ -1,0 +1,43 @@
+name: Record confirmed RoboForm signup
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: Email used for registration
+        type: string
+        required: true
+      confirmation:
+        description: Type I CONFIRM only AFTER RoboForm shows account created successfully
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: roboform-registration-records
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Record a personally verified registration
+        env:
+          REGISTRATION_EMAIL: ${{ inputs.email }}
+          USER_CONFIRMATION: ${{ inputs.confirmation }}
+        run: node scripts/record-confirmed.mjs
+      - name: Persist log
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/registrations.csv
+          git commit -m "data: record user-confirmed RoboForm registration"
+          git push origin HEAD:main
