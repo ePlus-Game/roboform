@@ -17,7 +17,8 @@ async function summary(lines) {
 async function run() {
   if (fullName.length < 2 || fullName.length > 80 || /[*?"<>|\\/]/.test(fullName))
     throw new Error('Invalid full name.');
-  if (secret.length < 16) throw new Error('Add a unique 16+ character ROBOFORM_MASTER_PASSWORD Actions secret.');
+  if (!secret.trim()) throw new Error('ROBOFORM_MASTER_PASSWORD is missing or blank. Check repository Actions secrets.');
+  if (secret.length < 16) throw new Error('ROBOFORM_MASTER_PASSWORD was supplied but is shorter than 16 characters. Update the repository secret.');
   const rows = await loadRecords(csvFile);
   if (alreadyVerified(rows, email)) throw new Error('Email already has a verified registration record; no retry attempted.');
 
