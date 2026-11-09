@@ -1,0 +1,32 @@
+name: Firefox RoboForm smoke (no registration)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/firefox-smoke.yml'
+      - 'scripts/smoke-firefox.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firefox-extension:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Firefox
+        id: firefox
+        uses: browser-actions/setup-firefox@v1
+        with:
+          firefox-version: latest
+      - name: Install Selenium
+        run: python -m pip install 'selenium>=4.30,<5'
+      - name: Load official RoboForm Firefox add-on (NO real signup)
+        env:
+          FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
+        run: python scripts/smoke-firefox.py
