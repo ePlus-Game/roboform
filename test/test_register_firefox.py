@@ -119,6 +119,56 @@ class RegistrationGuards(unittest.TestCase):
         self.assertFalse(state["success_screen"])
         self.assertEqual(driver.current_window_handle, "signup")
 
+    def test_verification_input_probe_reads_only_safe_dom_attributes(self):
+        class Element:
+            def __init__(self, attrs):
+                self.attrs = attrs
+                self.asked = []
+
+            def is_displayed(self):
+                return True
+
+            def get_attribute(self, key):
+                self.asked.append(key)
+                if key == "value":
+                    raise AssertionError("Input value must never be read")
+                return self.attrs.get(key)
+
+        class FakeDriver:
+            window_handles = ["signup", "challenge"]
+            current_window_handle = "signup"
+
+            def __init__(self, fields):
+                self.fields = fields
+                self.switch_to = self
+
+            def window(self, handle):
+                self.current_window_handle = handle
+
+            def find_elements(self, _by, selector):
+                assert "input" in selector
+                if self.current_window_handle == "challenge":
+                    return self.fields
+                return []
+
+        normal = Element({"type": "text", "class": "input-field normal-input",
+                          "id": "code", "name": "verification", "value": "secret"})
+        password = Element({"type": "password", "class": "password-field",
+                            "value": "do-not-read"})
+        malformed = Element({"type": "text", "class": "<bad markup>",
+                             "value": "private"})
+        driver = FakeDriver([normal, password, malformed])
+        with patch("builtins.print") as output:
+            observed = registration.inspect_verification_field_selectors(driver)
+        self.assertEqual(driver.current_window_handle, "signup")
+        self.assertEqual(observed[0]["class"], "input-field normal-input")
+        self.assertEqual(observed[0]["id"], "code")
+        self.assertNotIn("class", observed[1])
+        self.assertNotIn("value", str(observed))
+        self.assertNotIn("password-field", str(observed))
+        self.assertFalse(any("value" in e.asked for e in (normal, password, malformed)))
+        self.assertTrue(any("FIREFOX_VERIFICATION_INPUT_FIELDS" in str(call) for call in output.call_args_list))
+
     def test_image_code_capture_runs_ocr_in_same_browser_flow(self):
         state = {"success_screen": False, "challenge": "image-code", "visible_errors": 0}
         for captured in (True, False):
