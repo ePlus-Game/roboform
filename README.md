@@ -97,6 +97,24 @@ The signup selectors were derived from user-provided RoboForm extension **v10.0.
 
 References: [RoboForm signup help](https://help.roboform.com/hc/en-us/articles/115005962708-RoboForm-Windows-Installation-and-setup) · [RoboForm OTP documentation](https://help.roboform.com/hc/en-us/articles/115005043767-How-to-enable-One-Time-Password-OTP-via-email-or-SMS) · [Playwright extensions](https://playwright.dev/docs/chrome-extensions) · [Selenium Firefox](https://www.selenium.dev/documentation/webdriver/browsers/firefox/) · [RoboForm on Mozilla Add-ons](https://addons.mozilla.org/en-US/firefox/addon/roboform/).
 
+## Firefox signup workflow: same-run OCR and human readability report
+
+The manually started [`register-firefox.yml`](.github/workflows/register-firefox.yml) now performs the previously independent OCR/Selenium checks and publishes the **offline human-readability page in the same `signup-firefox` job**, before submitting an actual RoboForm signup. No separate workflow dispatch, local runner or service account is required.
+
+Order: validate consent and password → install Firefox, Selenium, CairoSVG, Pillow and Tesseract → run source tests → run read-only OCR on the committed SVG fixture → test the local Selenium form → generate and smoke-test the human readability page → upload **`svg-human-readability-<run_id>`** artifact → execute existing RoboForm signup → write CSV only after the existing UI success check.
+
+The artifact is created **before the signup attempt**, so it remains available for users to review even when RoboForm requires human verification and the signup is not confirmed. Its HTML embeds only the static test fixture; it does **not** capture the live registration CAPTCHA, receive participants' answers during the workflow run, or pass OCR output to the actual registration form. Browser testing of the offline review page is nonblocking for signup. For an actual human legibility measurement, download the artifact, give it to human testers, and collect their locally saved JSON responses afterwards.
+
+This is one manually triggered **registration workflow** containing several sequential test steps, not a new continuously running registration workflow. The independent OCR workflow remains for PR testing without real signups.
+
+## Human readability test for the original user-supplied SVG
+
+To check whether **people** can read the actual 165 × 50 image (not whether OCR can), run the existing **Tesseract OCR + Selenium form — single flow** workflow via `workflow_dispatch`. The job includes all existing OCR checks and additionally generates `dist/human-readability-review.html`, smoke-tests it in Firefox, and uploads an artifact named **`svg-human-readability`**.
+
+Download that artifact from the GitHub Actions run's **Artifacts** section, extract it, and open `human-readability-review.html` in a browser. Ask several testers to click **Bắt đầu**, read the exact original SVG, type the characters they perceive, rate readability and confidence, and download their individual JSON reports. The page works offline: there are no form submissions to a server and no credentials or RoboForm browser sessions. Share the HTML file with testers; collect their JSON responses separately.
+
+The page contains **no correct-answer label** so participants cannot see it by inspecting the HTML. To calculate objective character/error rates, the image designer needs to supply the actual intended text separately after responses are collected. Without that ground truth, the survey supports self-reported readability, transcription consistency and elapsed time only; CI success does **not** demonstrate that human participants can correctly read it.
+
 ## Single GitHub Actions OCR + Selenium demo
 
 The same [Tesseract workflow](.github/workflows/tesseract-ocr-smoke.yml) runs **one `test-ocr` job**, with these steps in sequence: install Firefox, Tesseract, CairoSVG, Pillow and Selenium; run the baseline text recognition; inspect the user-provided SVG offline; then run an end-to-end Selenium Firefox test against a **local HTML form**.
