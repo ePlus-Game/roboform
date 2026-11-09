@@ -58,6 +58,18 @@ def recognized_text(tsv: str) -> str | None:
     return candidate
 
 
+def ocr_status(group_count: int, suggestion: str | None) -> str:
+    """Distinguish missing OCR text from a suggestion rejected by the safety filter.
+
+    Never output raw discarded OCR tokens (they may contain unrelated data).
+    """
+    if suggestion is not None:
+        return "unverified-suggestion"
+    if group_count > 0:
+        return "filtered-ocr-output"
+    return "no-text-groups"
+
+
 def analyze(path: Path) -> tuple[int, int, int, float | None, str | None]:
     width, height = dimensions(path)
     result = subprocess.run(
@@ -86,6 +98,8 @@ def main() -> None:
     score = f"{mean:.1f}" if mean is not None else "N/A"
     print(f"FIREFOX_OCR_READONLY: image={width}x{height} recognized_groups={count} mean_confidence={score}")
     print(f"FIREFOX_OCR_RECOGNIZED_TEXT: {recognized or '[no safe text detected]'} (unverified)")
+    status = ocr_status(count, recognized)
+    print(f"FIREFOX_OCR_STATUS: {status}")
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with Path(summary).open("a", encoding="utf-8") as out:
@@ -95,6 +109,7 @@ def main() -> None:
                 f"- OCR groups: {count}\n"
                 f"- Mean Tesseract confidence: {score}\n"
                 f"- OCR recognized text (unverified): `{recognized or '[no safe text detected]'}`\n"
+                f"- OCR status: `{status}` (a filtered result is not an OCR engine failure)\n"
                 "- OCR output is displayed for review only, not submitted for verification.\n"
                 "- Registration remains unconfirmed until RoboForm reports success.\n"
             )

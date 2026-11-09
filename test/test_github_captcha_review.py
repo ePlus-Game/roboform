@@ -55,6 +55,27 @@ class GithubReviewTests(unittest.TestCase):
         self.assertNotIn("test-only", body)
         self.assertEqual(reviewer.image_sha, "b" * 40)
 
+    def test_issue_distinguishes_filtered_ocr_from_no_detected_groups(self):
+        reviewer = self.setup_reviewer()
+        bodies = []
+        def fake_api(method, suffix, payload=None, missing_ok=False):
+            if method == "PUT":
+                return {"content": {"sha": "b" * 40}}
+            if method == "POST" and suffix == "issues":
+                bodies.append(payload["body"])
+                return {"number": 42, "html_url": "https://github.com/example/roboform/issues/42"}
+            return None
+        reviewer.api = fake_api
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp) / "isolated.png"
+            image.write_bytes(review_mod.PNG_MAGIC + b"test-png-data" * 12)
+            with patch("builtins.print"):
+                reviewer.publish(image, None, "15.6")
+                reviewer.publish(image, None, "N/A")
+        self.assertIn("kết quả bị lọc", bodies[0])
+        self.assertIn("không phát hiện được", bodies[1])
+        self.assertIn("CHƯA XÁC MINH", bodies[0])
+
     def test_only_workflow_actor_can_supply_code(self):
         reviewer = self.setup_reviewer()
         reviewer.issue = 42

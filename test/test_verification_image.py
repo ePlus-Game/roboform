@@ -57,6 +57,11 @@ class VerificationImageDiagnosticsTest(unittest.TestCase):
             self.assertEqual((width, height, count, score, recognized), (165, 50, 2, 92.0, "AB123"))
             self.assertEqual(mock_run.call_args.args[0][0], "tesseract")
 
+    def test_ocr_status_distinguishes_missing_text_from_filtered_output(self) -> None:
+        self.assertEqual(diagnostic.ocr_status(0, None), "no-text-groups")
+        self.assertEqual(diagnostic.ocr_status(2, None), "filtered-ocr-output")
+        self.assertEqual(diagnostic.ocr_status(2, "AB123"), "unverified-suggestion")
+
     def test_unexpected_ocr_output_is_not_logged(self) -> None:
         bad = ("SECRET_TOKEN", "email@example.com", "ABCDEFGHIJKLM", "hello world", "<script>")
         for value in bad:
