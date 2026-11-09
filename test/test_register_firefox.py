@@ -119,6 +119,29 @@ class RegistrationGuards(unittest.TestCase):
         self.assertFalse(state["success_screen"])
         self.assertEqual(driver.current_window_handle, "signup")
 
+    def test_image_code_capture_runs_ocr_in_same_browser_flow(self):
+        state = {"success_screen": False, "challenge": "image-code", "visible_errors": 0}
+        for captured in (True, False):
+            with self.subTest(captured=captured):
+                with patch.object(registration, "inspect_post_submit", return_value=state), \
+                     patch.object(registration, "capture_verification_image", return_value=captured), \
+                     patch.object(registration, "inspect_captured_verification_image") as analyze, \
+                     patch.object(registration.time, "monotonic", side_effect=[0, 6, 6]):
+                    with self.assertRaisesRegex(registration.RegistrationBlocked, "image-code"):
+                        registration.await_confirmation(object(), "test@example.com")
+                    self.assertEqual(analyze.call_count, int(captured))
+
+    def test_ocr_process_receives_image_path_not_form_data(self):
+        from types import SimpleNamespace
+        image = Path("dist/firefox-verification-image.png")
+        with patch.object(registration.subprocess, "run",
+                          return_value=SimpleNamespace(returncode=0)) as process:
+            registration.inspect_captured_verification_image(image)
+            args = process.call_args.args[0]
+            self.assertEqual(args[-1], str(image))
+            self.assertIn("analyze-verification-image.py", args[1])
+            self.assertNotIn("REGISTRATION_EMAIL", str(args))
+
     def test_security_widget_detection(self):
         class FakeDriver:
             def __init__(self, elements):
