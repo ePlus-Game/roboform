@@ -1,7 +1,7 @@
 """End-to-end OCR-to-form demonstration on a local HTML page only.
 
 CI creates the sample SVG and form. It never contacts RoboForm or submits a
-CAPTCHA on any real website. All data remains inside a temporary directory.
+Remote endpoints are not contacted. All data remains in a temporary directory.
 """
 from __future__ import annotations
 
