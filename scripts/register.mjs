@@ -3,6 +3,7 @@ import { mkdtemp, appendFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { installExtension, EXTENSION_ID } from './install-extension.mjs';
+import { openSignupForm } from './signup-ui.mjs';
 import { normalizeEmail, loadRecords, alreadyVerified, recordVerified } from '../lib/records.mjs';
 
 const csvFile = 'data/registrations.csv';
@@ -34,20 +35,12 @@ async function run() {
     await page.goto(`chrome-extension://${EXTENSION_ID}/start-page.html`, {
       waitUntil: 'domcontentloaded', timeout: 60_000
     });
-    await page.locator('.choose-setup-way input[type="button"][value="Sign Up"]')
-      .waitFor({ state: 'visible', timeout: 60_000 });
-    await page.locator('.choose-setup-way input[type="button"][value="Sign Up"]').click();
-    const form = page.locator('.create-new-account');
-    await form.waitFor({ state: 'visible', timeout: 45_000 });
-    const textFields = form.locator('input[type="text"]');
-    const passFields = form.locator('input[type="password"]');
-    if ((await textFields.count()) !== 2 || (await passFields.count()) !== 2)
-      throw new Error('RoboForm signup form changed; inspect extension selectors.');
+    const { textFields, passFields } = await openSignupForm(page);
     await textFields.nth(0).fill(email);
     await passFields.nth(0).fill(secret);
     await passFields.nth(1).fill(secret);
     await textFields.nth(1).fill(fullName);
-    await form.locator('input[type="button"][value="Create Account"]').click();
+    await page.getByText('Create Account', { exact: true }).last().click();
     console.log('Create Account clicked; waiting for RoboForm confirmation (not assuming success).');
 
     const confirmation = page.locator('.account-confirmation .credentials-section .email');
@@ -55,7 +48,7 @@ async function run() {
     catch {
       const challenge = page.frames().some(frame => /captcha|turnstile|challenge/i.test(frame.url())) ||
         await page.locator('iframe[src*="captcha"], iframe[src*="turnstile"], .cf-turnstile, .g-recaptcha').count() > 0;
-      const errors = await form.locator('.error-text:not(.hidden), .error-balloon:not(.hidden)')
+      const errors = await page.locator('.error-text:not(.hidden), .error-balloon:not(.hidden)')
         .allTextContents().catch(() => []);
       const concise = errors.map(t => t.trim()).filter(Boolean).join('; ').slice(0, 500)
         .replaceAll(secret, '[REDACTED]');
