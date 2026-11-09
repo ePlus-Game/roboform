@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { installExtension, EXTENSION_ID } from './install-extension.mjs';
-import { openSignupForm } from './signup-ui.mjs';
+import { openSignupForm, getSignupSubmissionGate } from './signup-ui.mjs';
 
 const extensionDir = await installExtension();
 const userData = await mkdtemp(join(tmpdir(), 'roboform-smoke-'));
@@ -18,10 +18,22 @@ try {
   await page.goto(`chrome-extension://${EXTENSION_ID}/start-page.html`, {
     waitUntil: 'domcontentloaded', timeout: 60_000
   });
-  // Exercise the *same* selectors used by real registration.
-  // No email, password or account submission in this smoke test.
-  await openSignupForm(page);
-  console.log('Smoke PASS: official RoboForm extension opens signup form with shared registration selectors.');
+  const { textFields, passFields } = await openSignupForm(page);
+  // Smoke uses synthetic data only, never a real secret or registration.
+  await textFields.nth(0).fill('roboform-smoke@example.com');
+  await passFields.nth(0).fill('ExampleSmokeOnly#2026Strong');
+  await passFields.nth(1).fill('ExampleSmokeOnly#2026Strong');
+  await textFields.nth(1).fill('Smoke Tester');
+  await textFields.nth(1).blur();
+  await page.waitForTimeout(1500);
+  const { enabled, requiresHumanVerification } = await getSignupSubmissionGate(page);
+  if (requiresHumanVerification && !enabled) {
+    console.log('SMOKE_PASS: RoboForm signup UI loaded; Create Account is gated by human verification (Turnstile). Automated signup CANNOT be confirmed in unattended CI.');
+  } else if (enabled) {
+    console.log('SMOKE_PASS: RoboForm signup UI loaded; Create Account is enabled with synthetic data. No submission was attempted.');
+  } else {
+    throw new Error('Create Account is disabled without a recognized verification widget. Check local validation and RoboForm UI changes.');
+  }
   console.log('No personal data was submitted or account created during this smoke test.');
 } finally {
   if (context) await context.close();

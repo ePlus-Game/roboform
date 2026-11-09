@@ -4,6 +4,14 @@
 
 [**Open the signup workflow**](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml) — then select **Run workflow**.
 
+## Current limitation: RoboForm human verification
+
+The actual GitHub Actions registration job may **not** be able to create an account unattended. In the live registration run on 2026-11-09, all four form inputs passed basic HTML validity checks, but the **Create Account** button remained disabled. A no-submission smoke test confirmed the presence of RoboForm's **Cloudflare Turnstile** human-verification widget. This is a deliberate interactive security requirement; this workflow does **not** attempt to bypass it.
+
+When Turnstile blocks submission, the registration job fails immediately with an explicit error and **does not** write `data/registrations.csv`. A passing smoke test validates the extension UI and challenge detection, **not** successful account creation.
+
+**To create an account when human verification is required:** use RoboForm's [official signup flow](https://www.roboform.com/) in your browser and complete its security verification yourself. Do not enter your Master Password in GitHub issue comments, logs, PRs or workflow inputs. If you already registered manually, do not rerun the automation just to make a CSV entry: a verified receipt must reflect a successful registration, not an assumption.
+
 ## Setup (once)
 
 1. Go to **Settings → Secrets and variables → Actions → New repository secret**.
