@@ -97,6 +97,12 @@ The signup selectors were derived from user-provided RoboForm extension **v10.0.
 
 References: [RoboForm signup help](https://help.roboform.com/hc/en-us/articles/115005962708-RoboForm-Windows-Installation-and-setup) · [RoboForm OTP documentation](https://help.roboform.com/hc/en-us/articles/115005043767-How-to-enable-One-Time-Password-OTP-via-email-or-SMS) · [Playwright extensions](https://playwright.dev/docs/chrome-extensions) · [Selenium Firefox](https://www.selenium.dev/documentation/webdriver/browsers/firefox/) · [RoboForm on Mozilla Add-ons](https://addons.mozilla.org/en-US/firefox/addon/roboform/).
 
+## Single GitHub Actions OCR + Selenium demo
+
+The same [Tesseract workflow](.github/workflows/tesseract-ocr-smoke.yml) runs **one `test-ocr` job**, with these steps in sequence: install Firefox, Tesseract, CairoSVG, Pillow and Selenium; run the baseline text recognition; inspect the user-provided SVG offline; then run an end-to-end Selenium Firefox test against a **local HTML form**.
+
+The demo script [`scripts/test-ocr-form-demo.py`](scripts/test-ocr-form-demo.py) embeds its own plain-text SVG sample, reads it from the local browser page, converts it to PNG, recognizes `HELLO2026` with Tesseract, submits the result to the local form and requires `OCR_FORM_E2E_PASS`. It does **not** interact with RoboForm signup or solve live CAPTCHA challenges.
+
 ## Standalone Tesseract OCR smoke test
 
 The optional [Tesseract OCR smoke workflow](.github/workflows/tesseract-ocr-smoke.yml) runs entirely in GitHub Actions and performs **two separate offline OCR checks**:

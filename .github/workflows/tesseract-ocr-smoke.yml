@@ -1,9 +1,10 @@
-name: Tesseract OCR — synthetic + uploaded SVG
+name: Tesseract OCR + Selenium form — single flow
 
 on:
   pull_request:
     paths:
       - 'scripts/test-synthetic-svg-ocr.py'
+      - 'scripts/test-ocr-form-demo.py'
       - 'test/fixtures/user-provided-ocr.svg'
       - '.github/workflows/tesseract-ocr-smoke.yml'
   workflow_dispatch:
@@ -20,10 +21,17 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - name: Install Tesseract and SVG rendering dependency
+      - name: Install Firefox
+        id: firefox
+        uses: browser-actions/setup-firefox@v1
+        with:
+          firefox-version: latest
+      - name: Install Tesseract, SVG and Selenium dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends tesseract-ocr fonts-dejavu-core
-          python -m pip install 'CairoSVG==2.8.2' 'Pillow==11.3.0'
+          python -m pip install 'CairoSVG==2.8.2' 'Pillow==11.3.0' 'selenium>=4.30,<5'
       - name: Test synthetic and user-uploaded SVG-to-PNG-to-Tesseract recognition
         run: python scripts/test-synthetic-svg-ocr.py
+      - name: Test OCR to local Firefox form (same job)
+        run: python scripts/test-ocr-form-demo.py
