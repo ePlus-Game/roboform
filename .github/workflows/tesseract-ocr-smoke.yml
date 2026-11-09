@@ -5,6 +5,8 @@ on:
     paths:
       - 'scripts/test-synthetic-svg-ocr.py'
       - 'scripts/test-ocr-form-demo.py'
+      - 'scripts/build-readability-review.py'
+      - 'scripts/test-readability-review.py'
       - 'test/fixtures/user-provided-ocr.svg'
       - '.github/workflows/tesseract-ocr-smoke.yml'
   workflow_dispatch:
@@ -35,3 +37,14 @@ jobs:
         run: python scripts/test-synthetic-svg-ocr.py
       - name: Test OCR to local Firefox form (same job)
         run: python scripts/test-ocr-form-demo.py
+      - name: Generate offline human readability review using original SVG
+        run: python scripts/build-readability-review.py --output dist/human-readability-review.html
+      - name: Smoke-test the human readability page in Firefox
+        run: python scripts/test-readability-review.py
+      - name: Upload self-contained human readability page
+        uses: actions/upload-artifact@v7
+        with:
+          name: svg-human-readability
+          path: dist/human-readability-review.html
+          if-no-files-found: error
+          retention-days: 14
