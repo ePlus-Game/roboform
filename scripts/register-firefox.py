@@ -114,6 +114,44 @@ def find_submit_button(driver):
     return None
 
 
+def manual_verification_enabled() -> bool:
+    """Opt-in local mode: a human completes verification in the headed browser.
+
+    Off by default so GitHub Actions keeps the original fail-closed behaviour:
+    detect the challenge, run the read-only OCR diagnostic, and stop.
+    """
+    return os.getenv("ROBOFORM_MANUAL_VERIFICATION", "").strip().lower() in (
+        "1", "true", "yes",
+    )
+
+
+def manual_timeout_seconds() -> int:
+    try:
+        value = int(os.getenv("ROBOFORM_MANUAL_TIMEOUT", "300"))
+    except ValueError:
+        value = 300
+    return min(600, max(30, value))
+
+
+def wait_for_enabled_submit(driver, timeout: int):
+    """Wait while the operator completes pre-submit verification by hand."""
+    started = time.monotonic()
+    announced = False
+    while time.monotonic() - started < timeout:
+        submit = find_submit_button(driver)
+        if submit is not None and submit.is_enabled():
+            return submit
+        if not announced:
+            print(
+                "FIREFOX_MANUAL_VERIFICATION: Create Account is waiting for "
+                "verification. Complete it yourself in the open Firefox window; "
+                "this script will click Create Account once it is enabled."
+            )
+            announced = True
+        time.sleep(1)
+    return None
+
+
 def inspect_post_submit(driver) -> dict:
     """Inspect all browser tabs; never collect or log values, URLs or page HTML.
 
@@ -223,6 +261,53 @@ def inspect_verification_field_selectors(driver) -> list[dict]:
     return reported
 
 
+# XPI 9.9.9.1 audit (PR #29): the question component renders its text input
+# with the shared classes below, and the CAPTCHA image / refresh control with
+# the marker classes below. The input class alone is NOT CAPTCHA-specific.
+_MANUAL_FOCUS_SCRIPT = """
+const img = document.querySelector('.verify-human-code-image');
+if (!img) return false;
+let node = img;
+for (let depth = 0; depth < 8 && node; depth += 1, node = node.parentElement) {
+  if (!node.querySelectorAll) continue;
+  const inputs = [...node.querySelectorAll('input.input-field.normal-input')]
+    .filter(e => e.offsetParent !== null && e.type !== 'password' && e.type !== 'hidden');
+  if (inputs.length === 1) {
+    inputs[0].scrollIntoView({block: 'center'});
+    inputs[0].focus();
+    return true;
+  }
+  if (inputs.length > 1 && depth >= 3) return false;
+}
+return false;
+"""
+
+
+def focus_manual_verification_input(driver) -> bool:
+    """Focus the single input sharing a question container with the CAPTCHA image.
+
+    Manual mode only. Walks up from .verify-human-code-image (next to
+    .questions-group.refresh-code / .refresh-button in the XPI) instead of
+    trusting .input-field.normal-input globally, so the signup email and
+    password fields can never be picked. Never reads or writes a value:
+    it only focuses the field so the operator can type the code themselves.
+    Leaves the driver on the window containing the challenge.
+    """
+    try:
+        for handle in list(driver.window_handles):
+            try:
+                driver.switch_to.window(handle)
+                if driver.execute_script(_MANUAL_FOCUS_SCRIPT):
+                    print("FIREFOX_MANUAL_VERIFICATION: verification input focused for manual entry.")
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    print("FIREFOX_MANUAL_VERIFICATION: no single verification input found; not focusing any field.")
+    return False
+
+
 def capture_verification_image(driver, output: Path = Path("dist/firefox-verification-image.png")) -> bool:
     """Capture an isolated image element without surrounding form content."""
     try:
@@ -296,9 +381,12 @@ def sanitized_post_submit_state(state: dict) -> dict:
 
 
 def await_confirmation(driver, email: str) -> None:
+    manual = manual_verification_enabled()
+    timeout = manual_timeout_seconds() if manual else 90
+    announced = False
     started = time.monotonic()
     state = None
-    while time.monotonic() - started < 90:
+    while time.monotonic() - started < timeout:
         state = inspect_post_submit(driver)
         if state["success_screen"]:
             returned = normalize_email(state["confirmed_email"])
@@ -312,10 +400,28 @@ def await_confirmation(driver, email: str) -> None:
 
         elapsed = time.monotonic() - started
         if elapsed >= 5 and state["challenge"] != "none":
-            if state["challenge"] == "image-code":
+            if state["challenge"] == "image-code" and not (manual and announced):
                 inspect_verification_field_selectors(driver)
                 if capture_verification_image(driver):
                     inspect_captured_verification_image()
+            if manual:
+                # Human-in-the-loop: show the image / OCR hint once, then keep
+                # waiting. The operator types the code in Firefox themselves;
+                # OCR output is never entered or submitted by this script.
+                if not announced:
+                    print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
+                    if state["challenge"] == "image-code":
+                        focus_manual_verification_input(driver)
+                    print(
+                        "FIREFOX_MANUAL_VERIFICATION: RoboForm displayed " +
+                        state["challenge"] + ". Enter the code yourself in the "
+                        "open Firefox window and submit it there. This script "
+                        "will record the account only after RoboForm shows the "
+                        "success screen with a matching email."
+                    )
+                    announced = True
+                time.sleep(2)
+                continue
             print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state))
             raise RegistrationBlocked(
                 "RoboForm displayed " + state["challenge"] +
@@ -332,7 +438,7 @@ def await_confirmation(driver, email: str) -> None:
     print("FIREFOX_POST_SUBMIT_STATE:", sanitized_post_submit_state(state or {}))
     raise RegistrationBlocked(
         "RoboForm did not show the verified success screen in any Firefox window "
-        "within 90 seconds. Inspect the sanitized UI state above; no record written."
+        f"within {timeout} seconds. Inspect the sanitized UI state above; no record written."
     )
 
 
@@ -356,7 +462,11 @@ def run() -> None:
         if "start-page.html" not in files:
             raise RegistrationBlocked("Official RoboForm Firefox add-on does not have the expected start page.")
         opts = webdriver.FirefoxOptions()
-        opts.add_argument("-headless")
+        if manual_verification_enabled():
+            # Headed locally, so the operator can see and complete verification.
+            print("FIREFOX_MANUAL_VERIFICATION: headed mode; verification is completed by hand.")
+        else:
+            opts.add_argument("-headless")
         if binary := os.getenv("FIREFOX_BINARY"):
             opts.binary_location = binary
         # System-access is limited to this fresh isolated runner and used solely
@@ -393,12 +503,23 @@ def run() -> None:
                 raise RegistrationBlocked("Firefox signup Create Account button is missing; no submission attempted.")
             if not submit.is_enabled():
                 if verification_present(driver):
+                    if manual_verification_enabled():
+                        waited = wait_for_enabled_submit(driver, manual_timeout_seconds())
+                        if waited is not None:
+                            submit = waited
+                        else:
+                            raise RegistrationBlocked(
+                                "Manual verification was not completed in time before "
+                                "Create Account could be enabled; no account was recorded."
+                            )
+                    else:
+                        raise RegistrationBlocked(
+                            "RoboForm verification is pending before Create Account can be enabled; no account was recorded."
+                        )
+                if not submit.is_enabled():
                     raise RegistrationBlocked(
-                        "RoboForm verification is pending before Create Account can be enabled; no account was recorded."
+                        "Create Account stays disabled. Check RoboForm Firefox password rules and form validation; no account recorded."
                     )
-                raise RegistrationBlocked(
-                    "Create Account stays disabled. Check RoboForm Firefox password rules and form validation; no account recorded."
-                )
             submit.click()
             print("FIREFOX_SIGNUP_SUBMITTED: awaiting official confirmation; success not assumed.")
             await_confirmation(driver, email)
