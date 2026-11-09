@@ -95,7 +95,7 @@ def enter_signup_form(driver) -> None:
         raise RegistrationBlocked("RoboForm Firefox signup form did not appear after choosing Sign Up.") from error
 
 
-def human_verification_present(driver) -> bool:
+def verification_present(driver) -> bool:
     selectors = (
         ".verify-human-cloudflare-turnstile-v0, .verify-human-captcha, "
         ".captcha-container, .cf-turnstile, .g-recaptcha, "
@@ -116,7 +116,7 @@ def find_submit_button(driver):
 def inspect_post_submit(driver) -> dict:
     """Inspect all browser tabs; never collect or log values, URLs or page HTML.
 
-    The Firefox add-on may display a challenge in a different tab/window.
+    The Firefox add-on may use a separate window.
     Log only whitelisted UI states so Master Password and tokens stay private.
     """
     state = {
@@ -182,11 +182,7 @@ def inspect_post_submit(driver) -> dict:
 
 
 def capture_verification_image(driver, output: Path = Path("dist/firefox-verification-image.png")) -> bool:
-    """Save only the displayed image challenge for authorized manual review.
-
-    Do not capture browser pages, form inputs, passwords, cookies, network
-    traffic, CAPTCHA responses, or authentication tokens.
-    """
+    """Capture an isolated image element without surrounding form content."""
     try:
         original = driver.current_window_handle
     except Exception:
@@ -222,11 +218,11 @@ def capture_verification_image(driver, output: Path = Path("dist/firefox-verific
                             # Guard against empty/incorrect image artifacts.
                             if (output.exists() and output.stat().st_size >= 8 and
                                     output.read_bytes()[:8] == bytes((137, 80, 78, 71, 13, 10, 26, 10))):
-                                print("FIREFOX_VERIFICATION_IMAGE_CAPTURED: image-only artifact for human review.")
+                                print("FIREFOX_VERIFICATION_IMAGE_CAPTURED: isolated image saved.")
                                 return True
                             output.unlink(missing_ok=True)
             except Exception:
-                # The challenge window may close or the image may be unavailable.
+                # The window may close or the image may be unavailable.
                 continue
     finally:
         if original and original in driver.window_handles:
@@ -334,7 +330,7 @@ def run() -> None:
             if submit is None:
                 raise RegistrationBlocked("Firefox signup Create Account button is missing; no submission attempted.")
             if not submit.is_enabled():
-                if human_verification_present(driver):
+                if verification_present(driver):
                     raise RegistrationBlocked(
                         "RoboForm verification is pending before Create Account can be enabled; no account was recorded."
                     )

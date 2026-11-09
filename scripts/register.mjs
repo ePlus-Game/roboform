@@ -44,8 +44,8 @@ async function run() {
     await page.waitForTimeout(1500);
     const gate = await getSignupSubmissionGate(page);
     if (!gate.enabled) {
-      if (gate.requiresHumanVerification) {
-        throw new Error('RoboForm requires Cloudflare Turnstile human verification before Create Account can be enabled. Unattended GitHub Actions cannot complete this step. Register through the official RoboForm UI; no signup was confirmed or recorded.');
+      if (gate.verificationRequired) {
+        throw new Error('Account creation is pending verification; no registration was confirmed or recorded.');
       }
       throw new Error('Create Account remains disabled after filling the fields. Check UI-side password policy and required validation; no signup was confirmed or recorded.');
     }
@@ -61,7 +61,7 @@ async function run() {
         .allTextContents().catch(() => []);
       const concise = errors.map(t => t.trim()).filter(Boolean).join('; ').slice(0, 500)
         .replaceAll(secret, '[REDACTED]');
-      if (challenge) throw new Error('CAPTCHA/security challenge requires a human.');
+      if (challenge) throw new Error('Account confirmation is pending a verification step.');
       throw new Error('No verified success screen. Possible security check / OTP / signup error.' +
         (concise ? ` UI says: ${concise}` : ''));
     }

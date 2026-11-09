@@ -22,18 +22,3 @@ There are **two independent, manually triggered real-registration workflows**. C
 | [`firefox-smoke.yml`](.github/workflows/firefox-smoke.yml) | **Firefox + Selenium**, RoboForm official Mozilla Add-ons XPI | Separate browser feasibility test; no signup, credentials, or CSV write | Firefox extension startup and onboarding status reported |
 
 **Chromium and Firefox are separate workflows:** `record-confirmed.yml` retains the existing Chromium implementation; `register-firefox.yml` adds a Firefox-specific implementation. The `firefox-smoke.yml` check is separate and **never registers a real account**.
-
-
-## Firefox image verification diagnostics
-
-If Firefox registration stops at an `image-code` challenge, the same
-`register-firefox.yml` job attempts to capture only the image element,
-checks PNG dimensions, and runs **read-only** Tesseract OCR diagnostics.
-The job summary includes image dimensions, the number of OCR groups, and
-mean OCR confidence. The image artifact is retained for one day on the
-private GitHub Actions run. The CSV is updated only after account creation
-is confirmed.
-
-The OCR script and image-boundary tests are also covered by pull request CI.
-The end-to-end job uses manually dispatched input on `main`, so passing PR
-checks alone does not prove registration.

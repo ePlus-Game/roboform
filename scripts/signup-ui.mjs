@@ -28,9 +28,9 @@ export async function openSignupForm(page) {
 export async function getSignupSubmissionGate(page) {
   const submit = page.getByRole('button', { name: 'Create Account', exact: true }).last();
   const enabled = await submit.isEnabled();
-  const requiresHumanVerification = (await page.locator(
+  const verificationRequired = (await page.locator(
     '.verify-human-cloudflare-turnstile-v0, .verify-human-captcha, .captcha-container, ' +
     'iframe[src*="challenges.cloudflare.com"], .cf-turnstile, .g-recaptcha'
   ).count()) > 0;
-  return { submit, enabled, requiresHumanVerification };
+  return { submit, enabled, verificationRequired };
 }
