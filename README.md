@@ -97,6 +97,14 @@ The signup selectors were derived from user-provided RoboForm extension **v10.0.
 
 References: [RoboForm signup help](https://help.roboform.com/hc/en-us/articles/115005962708-RoboForm-Windows-Installation-and-setup) · [RoboForm OTP documentation](https://help.roboform.com/hc/en-us/articles/115005043767-How-to-enable-One-Time-Password-OTP-via-email-or-SMS) · [Playwright extensions](https://playwright.dev/docs/chrome-extensions) · [Selenium Firefox](https://www.selenium.dev/documentation/webdriver/browsers/firefox/) · [RoboForm on Mozilla Add-ons](https://addons.mozilla.org/en-US/firefox/addon/roboform/).
 
+## Human readability test for the original user-supplied SVG
+
+To check whether **people** can read the actual 165 × 50 image (not whether OCR can), run the existing **Tesseract OCR + Selenium form — single flow** workflow via `workflow_dispatch`. The job includes all existing OCR checks and additionally generates `dist/human-readability-review.html`, smoke-tests it in Firefox, and uploads an artifact named **`svg-human-readability`**.
+
+Download that artifact from the GitHub Actions run's **Artifacts** section, extract it, and open `human-readability-review.html` in a browser. Ask several testers to click **Bắt đầu**, read the exact original SVG, type the characters they perceive, rate readability and confidence, and download their individual JSON reports. The page works offline: there are no form submissions to a server and no credentials or RoboForm browser sessions. Share the HTML file with testers; collect their JSON responses separately.
+
+The page contains **no correct-answer label** so participants cannot see it by inspecting the HTML. To calculate objective character/error rates, the image designer needs to supply the actual intended text separately after responses are collected. Without that ground truth, the survey supports self-reported readability, transcription consistency and elapsed time only; CI success does **not** demonstrate that human participants can correctly read it.
+
 ## Single GitHub Actions OCR + Selenium demo
 
 The same [Tesseract workflow](.github/workflows/tesseract-ocr-smoke.yml) runs **one `test-ocr` job**, with these steps in sequence: install Firefox, Tesseract, CairoSVG, Pillow and Selenium; run the baseline text recognition; inspect the user-provided SVG offline; then run an end-to-end Selenium Firefox test against a **local HTML form**.
