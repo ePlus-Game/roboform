@@ -5,6 +5,39 @@
 
 There are **two independent, manually triggered real-registration workflows**. Choose **one** browser for a new account. Both require a 16+ character `ROBOFORM_MASTER_PASSWORD` repository secret, use `David Nguyen` as the default full name, and record an entry **only after RoboForm explicitly confirms account creation and the email matches**. **Do not run both workflows for the same email.**
 
+## Optional email generation and domain-specific records
+
+Both manually-dispatched registration workflows accept an **optional email**. Leave
+the Email field empty to generate a unique random address such as
+`a1b2c3d4e5f60708@hoangnnm.tech` (16 lowercase hexadecimal characters).
+The generator checks **both** `data/registrations.csv` and `data/hoangnnm.csv`,
+including unverified entries, and retries on any collision. Both workflows
+use the same concurrency group to serialize registration attempts.
+
+- Confirmed `@hoangnnm.tech` accounts (generated **or entered manually**) are
+  stored in `data/hoangnnm.csv`.
+- Confirmed accounts at other domains stay in `data/registrations.csv`.
+- Neither CSV is updated unless RoboForm confirms the exact selected email.
+- Confirmed signups include `trial_started_at_utc` and `trial_ends_at_utc`
+  (estimated **30 days** after the verified signup timestamp).
+- These fields are **local estimates**: they do not query RoboForm's billing
+  or account entitlements. Verify the actual trial end in the RoboForm account.
+- Previously recorded rows have blank trial dates rather than a fabricated end date.
+- CSV is the source of truth; the GitHub Actions Job Summary is the readable report.
+- The generated address appears in the GitHub Actions log and Job Summary.
+- **Important:** Generating an address does not provision a mailbox. The
+  `hoangnnm.tech` domain must support the address or catch-all forwarding
+  if registration requires receiving confirmation emails.
+
+### GitHub Actions registration concurrency
+
+Both Firefox and Chromium registration workflows use the exact same
+`concurrency.group: roboform-registration` with `cancel-in-progress: false`,
+so only **one registration workflow runs at a time**. This does not serialize
+independent CI, smoke-test or audit workflows. GitHub Actions concurrency
+supports at most one pending run in a group; a newer pending run may replace
+an older pending run, so it is not a durable FIFO queue.
+
 ## Node.js version (CI and registration)
 
 - **Node.js 26 LTS (Lithium)** is the latest stable/LTS line as of 2026-11-09; the latest patch then is **26.13.0**. Node.js 27 is still **Alpha** and is not used for registration.

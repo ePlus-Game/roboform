@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       email:
-        description: Email for a new RoboForm account
-        required: true
+        description: Optional email; blank generates an unused xxx@hoangnnm.tech
+        required: false
+        default: ''
         type: string
       full_name:
         description: Full name for the account
@@ -15,6 +16,11 @@ on:
       privacy_consent:
         description: Agree to RoboForm Firefox Privacy terms (uncheck to decline)
         required: true
+        type: boolean
+        default: true
+      ddddocr_hint:
+        description: Include read-only ddddocr hint in the GitHub human verification Issue
+        required: false
         type: boolean
         default: true
 
@@ -61,6 +67,8 @@ jobs:
           node-version-file: '.nvmrc'
           check-latest: true
           package-manager-cache: false
+      - name: Select supplied email or generate a unique hoangnnm.tech address
+        run: node scripts/select-registration-email.mjs
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -74,17 +82,23 @@ jobs:
           python -m pip install 'selenium>=4.30,<5'
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends tesseract-ocr
+      - name: Install optional ddddocr model for human review
+        if: ${{ inputs.ddddocr_hint }}
+        continue-on-error: true
+        run: python -m pip install 'ddddocr==1.6.1'
       - name: Test source and records
         run: |
-          python -m py_compile scripts/firefox_support.py scripts/register-firefox.py scripts/analyze-verification-image.py scripts/github_captcha_review.py
+          python -m py_compile scripts/firefox_support.py scripts/register-firefox.py scripts/analyze-verification-image.py scripts/github_captcha_review.py scripts/ddddocr-hint.py
           python -m unittest discover -s test -p 'test_register_firefox.py' -v
           python -m unittest discover -s test -p 'test_github_captcha_review.py' -v
+          python -m unittest discover -s test -p 'test_ddddocr_hint.py' -v
           npm test
       - name: Register through official RoboForm Firefox extension
         env:
           FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
           GITHUB_TOKEN: ${{ github.token }}
           ROBOFORM_GITHUB_CAPTCHA_REVIEW: 'true'
+          ROBOFORM_DDDDOCR_ENABLED: ${{ inputs.ddddocr_hint }}
         run: python scripts/register-firefox.py
       - name: Upload original PNG verification screenshot (no ZIP)
         if: ${{ failure() }}
@@ -109,7 +123,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/registrations.csv
+          git add data/registrations.csv data/hoangnnm.csv
           if git diff --cached --quiet; then
             echo "No newly verified Firefox signup receipt generated."
             exit 1

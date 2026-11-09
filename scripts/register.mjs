@@ -4,9 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { installExtension, EXTENSION_ID } from './install-extension.mjs';
 import { openSignupForm, getSignupSubmissionGate } from './signup-ui.mjs';
-import { normalizeEmail, loadRecords, alreadyVerified, recordVerified } from '../lib/records.mjs';
+import { normalizeEmail, alreadyVerified, recordVerified } from '../lib/records.mjs';
+import { registrationFileForEmail, loadAllRegistrations } from '../lib/registration-email.mjs';
 
-const csvFile = 'data/registrations.csv';
+const csvFile = registrationFileForEmail(process.env.REGISTRATION_EMAIL);
 const email = normalizeEmail(process.env.REGISTRATION_EMAIL);
 const fullName = (process.env.REGISTRATION_FULL_NAME || 'RoboForm User').trim();
 const secret = process.env.ROBOFORM_MASTER_PASSWORD || '';
@@ -20,7 +21,7 @@ async function run() {
     throw new Error('Invalid full name.');
   if (!secret.trim()) throw new Error('ROBOFORM_MASTER_PASSWORD is missing or blank. Check repository Actions secrets.');
   if (secret.length < 16) throw new Error('ROBOFORM_MASTER_PASSWORD was supplied but is shorter than 16 characters. Update the repository secret.');
-  const rows = await loadRecords(csvFile);
+  const rows = await loadAllRegistrations();
   if (alreadyVerified(rows, email)) throw new Error('Email already has a verified registration record; no retry attempted.');
 
   const extensionDir = await installExtension();
@@ -72,7 +73,8 @@ async function run() {
       throw new Error('RoboForm did not display the expected success message.');
     const receipt = await recordVerified(csvFile, email);
     console.log(`SIGNUP_CONFIRMED: ${receipt.email} at ${receipt.utc} (${receipt.vn} Vietnam).`);
-    await summary(`### RoboForm signup confirmed\n\nEmail: ${receipt.email}\n\nUTC: ${receipt.utc}\n\nVietnam date: ${receipt.vn}`);
+    console.log(`TRIAL_ESTIMATED: 30 days from ${receipt.trialStartUtc} to ${receipt.trialEndUtc} UTC (not provider-confirmed).`);
+    await summary(`### RoboForm signup confirmed\n\nEmail: ${receipt.email}\n\nUTC: ${receipt.utc}\n\nVietnam date: ${receipt.vn}\n\nEstimated 30-day trial end (UTC): ${receipt.trialEndUtc}\n\nConfirm actual trial entitlement and expiration in RoboForm.`);
   } finally {
     if (context) await context.close();
     await rm(profile, { recursive: true, force: true });

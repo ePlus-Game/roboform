@@ -61,7 +61,8 @@ class GithubCaptchaReview:
         except (error.URLError, OSError, ValueError, TimeoutError):
             raise ReviewUnavailable("GitHub API was unavailable.") from None
 
-    def publish(self, image: Path, suggestion: str | None, confidence: str) -> int:
+    def publish(self, image: Path, suggestion: str | None, confidence: str, *,
+                ddddocr_hint: str | None = None, ddddocr_enabled: bool = False) -> int:
         raw = image.read_bytes()
         if not raw.startswith(PNG_MAGIC) or not 100 <= len(raw) <= 512000:
             raise ReviewUnavailable("Not a valid bounded PNG verification image.")
@@ -92,11 +93,21 @@ class GithubCaptchaReview:
         url = f"https://raw.githubusercontent.com/{self.repo}/{PREVIEW_BRANCH}/{self.path}"
         run_url = f"https://github.com/{self.repo}/actions/runs/{self.run}"
         hint = suggestion or ("OCR có phát hiện chữ nhưng kết quả bị lọc vì định dạng không hợp lệ" if confidence != "N/A" else "OCR không phát hiện được nhóm ký tự")
+        ddddocr_line = ""
+        model_hint = None
+        if ddddocr_enabled:
+            if isinstance(ddddocr_hint, str) and re.fullmatch(r"[A-Za-z0-9]{1,12}", ddddocr_hint):
+                model_hint = ddddocr_hint
+            ddddocr_line = (
+                f"**ddddocr gợi ý (CHƯA XÁC MINH):** {model_hint or 'Không có gợi ý hợp lệ'}\n\n"
+                "**Độ tin cậy ddddocr:** N/A (API nhận dạng không cung cấp)\n\n"
+            )
         body = (
             "## RoboForm Firefox — xác minh CAPTCHA thủ công\n\n"
             f"![Ảnh CAPTCHA thực tế]({url})\n\n"
             f"**OCR gợi ý (CHƯA XÁC MINH):** {hint}\n\n"
-            f"**Độ tin cậy OCR:** {confidence}\n\n"
+            f"**Độ tin cậy OCR (Tesseract):** {confidence}\n\n"
+            f"{ddddocr_line}"
             "**Tự đối chiếu ảnh; đừng mặc định tin OCR.**\n"
             f"Chỉ người kích hoạt workflow (@{self.actor}) được phản hồi:\n\n"
             "~~~text\n/captcha ABC123\n~~~\n\n"
@@ -118,7 +129,9 @@ class GithubCaptchaReview:
                 out.write(
                     "\n### Firefox verification — manual review\n"
                     f"- [View original image and OCR suggestion in GitHub Issue]({issue_url})\n"
-                    f"- Unverified OCR hint: {hint}; confidence: {confidence}\n"
+                    f"- Unverified Tesseract hint: {hint}; confidence: {confidence}\n"
+                    + (f"- Unverified ddddocr hint: {model_hint or 'no safe hint'}; confidence unavailable\n"
+                       if ddddocr_enabled else "")
                 )
         return self.issue
 
