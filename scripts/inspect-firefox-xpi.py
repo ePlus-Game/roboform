@@ -81,6 +81,19 @@ def main():
                                 "marker": marker,
                                 "excerpt": excerpt,
                             }, ensure_ascii=False))
+                    # Identify element construction immediately before the code
+                    # verification image. Emit only small input tag contexts.
+                    image_markers = list(re.finditer("verify-human-code-image", source))
+                    if len(image_markers) > 1:
+                        pivot = image_markers[1].start()
+                        nearby = source[max(0, pivot - 12000):pivot]
+                        input_tags = list(re.finditer(r'(?:D|o)\\("input"', nearby))
+                        for item in input_tags[-15:]:
+                            left = max(0, item.start() - 110)
+                            right = min(len(nearby), item.end() + 270)
+                            print("XPI_INPUT_ELEMENT", json.dumps({
+                                "excerpt": re.sub(r"\\s+", " ", nearby[left:right])[:380]
+                            }, ensure_ascii=False))
                 for key, regex in PATTERNS.items():
                     matches = list(re.finditer(regex, source, re.I))
                     if not matches:
