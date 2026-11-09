@@ -3,7 +3,7 @@ import { mkdtemp, appendFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { installExtension, EXTENSION_ID } from './install-extension.mjs';
-import { openSignupForm } from './signup-ui.mjs';
+import { openSignupForm, getSignupSubmissionGate } from './signup-ui.mjs';
 import { normalizeEmail, loadRecords, alreadyVerified, recordVerified } from '../lib/records.mjs';
 
 const csvFile = 'data/registrations.csv';
@@ -40,7 +40,18 @@ async function run() {
     await passFields.nth(0).fill(secret);
     await passFields.nth(1).fill(secret);
     await textFields.nth(1).fill(fullName);
-    await page.getByText('Create Account', { exact: true }).last().click();
+    await textFields.nth(1).blur();
+    // The Create Account button is gated by a Cloudflare Turnstile widget
+    // in RoboForm 10.0.2.0. Never attempt to bypass human verification.
+    await page.waitForTimeout(1500);
+    const gate = await getSignupSubmissionGate(page);
+    if (!gate.enabled) {
+      if (gate.requiresHumanVerification) {
+        throw new Error('RoboForm requires Cloudflare Turnstile human verification before Create Account can be enabled. Unattended GitHub Actions cannot complete this step. Register through the official RoboForm UI; no signup was confirmed or recorded.');
+      }
+      throw new Error('Create Account remains disabled after filling the fields. Check UI-side password policy and required validation; no signup was confirmed or recorded.');
+    }
+    await gate.submit.click({ timeout: 15_000 });
     console.log('Create Account clicked; waiting for RoboForm confirmation (not assuming success).');
 
     const confirmation = page.locator('.account-confirmation .credentials-section .email');
