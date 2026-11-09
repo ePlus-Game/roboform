@@ -74,6 +74,26 @@ If the preflight passes, later signup errors concern browser registration or Rob
 - After RoboForm displays its expected success message **and** confirms the exact requested email, the workflow writes a `firefox_signup_ui_success` entry to `data/registrations.csv`. The Chromium flow retains `signup_ui_success` for backwards compatibility.
 - The two registration workflows share the same concurrency group and CSV deduplication. Use a unique Master Password for each new account. Do not replay HAR authentication requests, upload sensitive HAR files or use stale sessions.
 
+## Local interactive Firefox registration (manual CAPTCHA)
+
+A GitHub-hosted runner cannot expose its headless Firefox window to the operator. If RoboForm requests a human-only image-code CAPTCHA (confirmed by [run #42578909303](https://github.com/ePlus-Game/roboform/actions/runs/42578909303)), use the **local interactive** mode on your own computer instead. The script **does not perform OCR, copy/download CAPTCHA images, or bypass verification**. You read and complete any security challenge yourself in the original Firefox window; Selenium simply waits for RoboForm's verified success screen.
+
+Requirements: Firefox installed on your computer, **Node.js 26+**, **Python 3.12+**, and the repository checked out locally. In PowerShell, from the project root:
+
+```powershell
+npm install
+py -m pip install "selenium>=4.30,<5"
+$env:REGISTRATION_EMAIL = "YOUR_NEW_EMAIL@example.com"
+$env:REGISTRATION_FULL_NAME = "David Nguyen"
+$env:FIREFOX_PRIVACY_CONSENT = "true"   # Only if you agree with RoboForm's Privacy terms
+$env:FIREFOX_INTERACTIVE = "true"
+py scripts/register-firefox.py
+```
+
+The script prompts for your Master Password **without echoing it** (leave `ROBOFORM_MASTER_PASSWORD` unset to enable the prompt). It opens a visible Firefox session, installs the official signed extension and fills the registration form. If a challenge appears **before** Create Account, complete only that challenge and let Selenium click Create Account. If a challenge appears **after** submission, complete it inside the Firefox window. Keep the terminal open; the script monitors for up to **10 minutes** after submission and only writes `data/registrations.csv` when RoboForm shows both its actual success message and a matching account email.
+
+For **local use only**: `FIREFOX_INTERACTIVE=true` must **not** be enabled in GitHub-hosted Actions, which lacks a directly usable interactive browser. The default GitHub workflows stay headless and stop when human verification is required. Local registration results are stored in the local CSV, not automatically pushed to GitHub. Verify the account is new before attempting registration again.
+
 ## Why an OTP may not arrive
 
 Previously this repository's action only appended an **unverified email** and **never submitted an account registration**. That successful GitHub run did not mean RoboForm sent an email.
