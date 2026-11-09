@@ -119,6 +119,59 @@ class RegistrationGuards(unittest.TestCase):
         self.assertFalse(state["success_screen"])
         self.assertEqual(driver.current_window_handle, "signup")
 
+    def test_local_interactive_mode_must_be_explicitly_enabled(self):
+        with patch.dict(os.environ, {"FIREFOX_INTERACTIVE": "true"}):
+            self.assertTrue(registration.interactive_mode())
+        with patch.dict(os.environ, {"FIREFOX_INTERACTIVE": "false"}):
+            self.assertFalse(registration.interactive_mode())
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(registration.interactive_mode())
+
+    def test_interactive_challenge_waits_for_human_then_checks_real_success(self):
+        challenge = {"windows": 2, "signup_form_visible": False,
+                     "success_screen": False, "challenge": "image-code",
+                     "visible_errors": 0, "submit_enabled": False,
+                     "confirmed_email": None}
+        success = dict(challenge, success_screen=True,
+                       challenge="none", confirmed_email="expected@example.com")
+        with patch.object(registration, "inspect_post_submit", side_effect=[challenge, success]) as inspect, \
+             patch.object(registration.time, "sleep"), \
+             patch.object(registration.subprocess, "run") as record:
+            with patch.dict(os.environ, {"REGISTRATION_EMAIL": "expected@example.com"}):
+                registration.await_confirmation(object(), "expected@example.com", interactive=True)
+            self.assertEqual(inspect.call_count, 2)
+            record.assert_called_once()
+
+    def test_headless_challenge_still_fails_without_recording(self):
+        challenge = {"windows": 2, "signup_form_visible": False,
+                     "success_screen": False, "challenge": "image-code",
+                     "visible_errors": 0, "submit_enabled": False,
+                     "confirmed_email": None}
+        with patch.object(registration, "inspect_post_submit", return_value=challenge), \
+             patch.object(registration.time, "monotonic", side_effect=[0, 1, 7]), \
+             patch.object(registration.time, "sleep"), \
+             patch.object(registration.subprocess, "run") as record:
+            with self.assertRaisesRegex(registration.RegistrationBlocked, "image-code"):
+                registration.await_confirmation(object(), "expected@example.com")
+            record.assert_not_called()
+
+    def test_manual_pre_submit_waits_until_button_enabled(self):
+        class Button:
+            def __init__(self, enabled):
+                self.enabled = enabled
+
+            def is_enabled(self):
+                return self.enabled
+
+        class FakeDriver:
+            window_handles = ["signup"]
+
+        with patch.object(registration, "find_submit_button",
+                          side_effect=[Button(False), Button(True)]) as finder, \
+             patch.object(registration.time, "sleep"):
+            registration.wait_for_manual_pre_submit_verification(FakeDriver(), timeout=30)
+            self.assertEqual(finder.call_count, 2)
+
     def test_security_widget_detection(self):
         class FakeDriver:
             def __init__(self, elements):
