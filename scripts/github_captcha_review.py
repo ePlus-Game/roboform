@@ -108,7 +108,7 @@ class GithubCaptchaReview:
                     or len(registration_email) > 254
                     or ".." in registration_email
                     or not re.fullmatch(
-                        r"[a-z0-9][a-z0-9._%+\\-]*@[a-z0-9](?:[a-z0-9.\\-]*[a-z0-9])?\\.[a-z]{2,63}",
+                        r"[a-z0-9][a-z0-9._%+-]*@[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,63}",
                         registration_email,
                     )):
                 raise ReviewUnavailable("Invalid registration email for human review.")
