@@ -208,13 +208,23 @@ def capture_verification_image(driver, output: Path = Path("dist/firefox-verific
                     for element in driver.find_elements(By.CSS_SELECTOR, selector):
                         if not element.is_displayed():
                             continue
+                        # Reject unexpectedly large elements, which might include
+                        # account fields or the whole browser viewport.
+                        size = element.size
+                        if not (30 <= size["width"] <= 640 and
+                                18 <= size["height"] <= 240):
+                            continue
                         # A container is safe only when it has no form controls.
                         if element.find_elements(By.CSS_SELECTOR, "input, textarea, button, select"):
                             continue
                         output.parent.mkdir(parents=True, exist_ok=True)
                         if element.screenshot(str(output)):
-                            print("FIREFOX_VERIFICATION_IMAGE_CAPTURED: image-only artifact for human review.")
-                            return True
+                            # Guard against empty/incorrect image artifacts.
+                            if (output.exists() and output.stat().st_size >= 8 and
+                                    output.read_bytes()[:8] == bytes((137, 80, 78, 71, 13, 10, 26, 10))):
+                                print("FIREFOX_VERIFICATION_IMAGE_CAPTURED: image-only artifact for human review.")
+                                return True
+                            output.unlink(missing_ok=True)
             except Exception:
                 # The challenge window may close or the image may be unavailable.
                 continue
