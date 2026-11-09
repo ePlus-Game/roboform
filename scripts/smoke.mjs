@@ -31,10 +31,12 @@ try {
   console.log('POST_SIGNUP_BODY:', (await page.locator('body').innerText()).slice(0, 1100));
   console.log('POST_SIGNUP_INPUTS:', await page.locator('input').evaluateAll(nodes => nodes.map(n => ({type:n.type,placeholder:n.placeholder}))));
 
-  const pages = context.pages();
-  const signupPage = pages.find(p => p !== page && /setup|signup|account/i.test(p.url())) || page;
-  console.log('TARGET_PAGE:', signupPage.url());
-  await signupPage.locator('.create-new-account').waitFor({ state: 'visible', timeout: 8000 });
+  await page.getByText('Create Account', { exact: true }).waitFor({ state: 'visible', timeout: 15_000 });
+  const textCount = await page.locator('input[type="text"]').count();
+  const passwordCount = await page.locator('input[type="password"]').count();
+  if (textCount !== 2 || passwordCount !== 2) {
+    throw new Error(`Unexpected form input counts: text=${textCount}, password=${passwordCount}`);
+  }
   console.log('Smoke PASS: official RoboForm extension opens Sign Up form in headless Playwright Chromium.');
   console.log('No personal data was submitted or account created during this smoke test.');
 } finally {
