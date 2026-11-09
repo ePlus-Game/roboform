@@ -221,7 +221,7 @@ def capture_verification_image(driver, output: Path = Path("dist/firefox-verific
                         if element.screenshot(str(output)):
                             # Guard against empty/incorrect image artifacts.
                             if (output.exists() and output.stat().st_size >= 8 and
-                                    output.read_bytes()[:8] == b"\\x89PNG\\r\\n\\x1a\\n"):
+                                    output.read_bytes()[:8] == bytes((137, 80, 78, 71, 13, 10, 26, 10))):
                                 print("FIREFOX_VERIFICATION_IMAGE_CAPTURED: image-only artifact for human review.")
                                 return True
                             output.unlink(missing_ok=True)
