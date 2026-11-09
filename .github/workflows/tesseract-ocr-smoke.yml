@@ -1,0 +1,29 @@
+name: Tesseract OCR — synthetic + uploaded SVG
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-synthetic-svg-ocr.py'
+      - 'test/fixtures/user-provided-ocr.svg'
+      - '.github/workflows/tesseract-ocr-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-ocr:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install Tesseract and SVG rendering dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends tesseract-ocr fonts-dejavu-core
+          python -m pip install 'CairoSVG==2.8.2' 'Pillow==11.3.0'
+      - name: Test synthetic and user-uploaded SVG-to-PNG-to-Tesseract recognition
+        run: python scripts/test-synthetic-svg-ocr.py
