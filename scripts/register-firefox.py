@@ -267,6 +267,9 @@ def await_confirmation(driver, email: str) -> None:
                 raise RegistrationBlocked("Confirmed email does not match the requested account. No record written.")
             # Only a verified success screen + matching email can create a CSV.
             env = dict(os.environ)
+            # Local interactive mode can collect the email without putting it in
+            # the environment. Pass the validated value only to the receipt writer.
+            env["REGISTRATION_EMAIL"] = email
             env["CONFIRMED_EMAIL"] = returned
             subprocess.run(["node", "scripts/record-firefox.mjs"], check=True, env=env)
             return
