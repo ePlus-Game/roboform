@@ -68,27 +68,19 @@ jobs:
         uses: browser-actions/setup-firefox@v1
         with:
           firefox-version: latest
-      - name: Install Selenium
-        run: python -m pip install 'selenium>=4.30,<5'
+      - name: Install Selenium and Tesseract
+        run: |
+          python -m pip install 'selenium>=4.30,<5'
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends tesseract-ocr
       - name: Test source and records
         run: |
-          python -m py_compile scripts/firefox_support.py scripts/register-firefox.py
+          python -m py_compile scripts/firefox_support.py scripts/register-firefox.py scripts/analyze-verification-image.py
           npm test
       - name: Register through official RoboForm Firefox extension
         env:
           FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
         run: python scripts/register-firefox.py
-      - name: Inspect captured image with Tesseract (read-only; no Verify)
-        if: ${{ failure() }}
-        shell: bash
-        run: |
-          if [[ -f dist/firefox-verification-image.png ]]; then
-            sudo apt-get update -qq
-            sudo apt-get install -y --no-install-recommends tesseract-ocr
-            python scripts/analyze-verification-image.py dist/firefox-verification-image.png
-          else
-            echo "FIREFOX_OCR_SKIPPED: no isolated image-code capture was available"
-          fi
       - name: Upload image-only verification evidence
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7
