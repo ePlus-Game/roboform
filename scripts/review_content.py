@@ -158,9 +158,7 @@ def render_review(
         "\n### Firefox verification — manual review",
         "- Registration email: " + display_email,
         "- Email source: " + source,
-        "- [View original image and OCR suggestion in GitHub Issue](" + run_url.replace(
-            "/actions/runs/" + run, "/issues/ISSUE_NUMBER"
-        ) + ")",
+        "- [View original image and OCR suggestion in GitHub Issue](__ISSUE_URL__)",
         "- Unverified Tesseract hint: "
         + (tesseract_hint or "no safe hint") + "; confidence: " + confidence,
     ]
