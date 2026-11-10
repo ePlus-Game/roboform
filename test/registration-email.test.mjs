@@ -94,8 +94,8 @@ test('generated email is exported to GITHUB_ENV for later workflow steps', async
   });
   assert.equal(run.status, 0, run.stderr);
   const output = await readFile(envFile, 'utf8');
-  assert.match(output, /^REGISTRATION_EMAIL=[a-f0-9]{16}@hoangnnm\.tech\n$/);
-  assert.match(await readFile(summary, 'utf8'), /Generated signup email/);
+  assert.match(output, /^REGISTRATION_EMAIL=[a-f0-9]{16}@hoangnnm\.tech\nREGISTRATION_EMAIL_SOURCE=generated\n$/);
+  assert.match(await readFile(summary, 'utf8'), /RoboForm registration attempt/);
 });
 
 test('confirmed Firefox registration routes hoangnnm.tech to dedicated CSV only', async () => {
@@ -125,4 +125,26 @@ test('recording a manually provided external email still uses original CSV', asy
   assert.equal(run.status, 0, run.stderr);
   assert.match(await readFile(main, 'utf8'), /manual@example\.com/);
   assert.equal(await readFile(domain, 'utf8'), headers);
+});
+
+
+test('provided signup email is visible and records its provenance', async () => {
+  const { dir } = await workspace();
+  const envFile = join(dir, 'gha_env');
+  const summary = join(dir, 'summary.md');
+  const run = spawnSync(process.execPath, [helper], {
+    cwd: dir,
+    env: {
+      ...process.env,
+      REGISTRATION_EMAIL: 'Owner@Example.COM',
+      GITHUB_ENV: envFile,
+      GITHUB_STEP_SUMMARY: summary,
+    },
+    encoding: 'utf8',
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(await readFile(envFile, 'utf8'),
+    /^REGISTRATION_EMAIL=owner@example.com\nREGISTRATION_EMAIL_SOURCE=provided\n$/);
+  assert.match(await readFile(summary, 'utf8'), /owner@example.com/);
+  assert.match(run.stdout, /REGISTRATION_SELECTED_EMAIL: owner@example.com/);
 });
