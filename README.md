@@ -1,57 +1,152 @@
-# RoboForm registration — Chromium and Firefox
+# RoboForm registration workflows
 
-[![Chromium registration](https://img.shields.io/badge/Chromium-Register-238636?style=for-the-badge&logo=googlechrome&logoColor=white)](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml)
 [![Firefox registration](https://img.shields.io/badge/Firefox-Register-238636?style=for-the-badge&logo=firefoxbrowser&logoColor=white)](https://github.com/ePlus-Game/roboform/actions/workflows/register-firefox.yml)
+[![Chromium registration](https://img.shields.io/badge/Chromium-Register-238636?style=for-the-badge&logo=googlechrome&logoColor=white)](https://github.com/ePlus-Game/roboform/actions/workflows/record-confirmed.yml)
+[![CI](https://github.com/ePlus-Game/roboform/actions/workflows/ci.yml/badge.svg)](https://github.com/ePlus-Game/roboform/actions/workflows/ci.yml)
 
-There are **two independent, manually triggered real-registration workflows**. Choose **one** browser for a new account. Both require a 16+ character `ROBOFORM_MASTER_PASSWORD` repository secret, use `David Nguyen` as the default full name, and record an entry **only after RoboForm explicitly confirms account creation and the email matches**. **Do not run both workflows for the same email.**
+Manually triggered GitHub Actions for registering RoboForm accounts through the **official browser extensions**. Choose **Firefox + Selenium** for a GitHub Issue-based, human-operated verification flow, or **Chromium + Playwright** for the separate signup flow.
 
-## Optional email generation and domain-specific records
+**A submitted form or a passing CI run is not proof of registration.** A record is written only after RoboForm displays its expected success screen and confirms the exact requested email. Verification codes are supplied by a person, not automatically submitted from OCR predictions.
 
-Both manually-dispatched registration workflows accept an **optional email**. Leave
-the Email field empty to generate a unique random address such as
-`a1b2c3d4e5f60708@hoangnnm.tech` (16 lowercase hexadecimal characters).
-The generator checks **both** `data/registrations.csv` and `data/hoangnnm.csv`,
-including unverified entries, and retries on any collision. Both workflows
-use the same concurrency group to serialize registration attempts.
+## Quick start
 
-- Confirmed `@hoangnnm.tech` accounts (generated **or entered manually**) are
-  stored in `data/hoangnnm.csv`.
-- Confirmed accounts at other domains stay in `data/registrations.csv`.
-- Neither CSV is updated unless RoboForm confirms the exact selected email.
-- Confirmed signups include `trial_started_at_utc` and `trial_ends_at_utc`
-  (estimated **30 days** after the verified signup timestamp).
-- These fields are **local estimates**: they do not query RoboForm's billing
-  or account entitlements. Verify the actual trial end in the RoboForm account.
-- Previously recorded rows have blank trial dates rather than a fabricated end date.
-- CSV is the source of truth; the GitHub Actions Job Summary is the readable report.
-- The generated address appears in the GitHub Actions log and Job Summary.
-- **Important:** Generating an address does not provision a mailbox. The
-  `hoangnnm.tech` domain must support the address or catch-all forwarding
-  if registration requires receiving confirmation emails.
+1. In repository **Settings → Secrets and variables → Actions**, configure a unique `ROBOFORM_MASTER_PASSWORD` secret of **at least 16 characters**. Do not commit or paste the password into an Issue.
+2. Open [Register RoboForm account — Firefox](https://github.com/ePlus-Game/roboform/actions/workflows/register-firefox.yml), choose **Run workflow** on `main` and supply the inputs below.
+3. Leave `email` empty to generate an unused `@hoangnnm.tech` address, or enter your own email. Keep `privacy_consent` checked **only if you agree** to the extension's Privacy terms.
+4. If RoboForm asks for an image code, open the **human review GitHub Issue** linked in the run's **Job Summary**, inspect the image and respond manually. The running Firefox session waits for your answer.
+5. Check the run's outcome. Only a verified registration is recorded in a CSV; an error, an OCR hint or an unconfirmed signup must not be treated as success.
 
-### GitHub Actions registration concurrency
+> **Mailbox requirement:** Generating `xxx@hoangnnm.tech` does **not** create an inbox. Configure valid recipients or catch-all forwarding for `hoangnnm.tech` separately if RoboForm needs to send account email.
 
-Both Firefox and Chromium registration workflows use the exact same
-`concurrency.group: roboform-registration` with `cancel-in-progress: false`,
-so only **one registration workflow runs at a time**. This does not serialize
-independent CI, smoke-test or audit workflows. GitHub Actions concurrency
-supports at most one pending run in a group; a newer pending run may replace
-an older pending run, so it is not a durable FIFO queue.
+### Workflow inputs
 
-## Node.js version (CI and registration)
-
-- **Node.js 26 LTS (Lithium)** is the latest stable/LTS line as of 2026-11-09; the latest patch then is **26.13.0**. Node.js 27 is still **Alpha** and is not used for registration.
-- The single source of truth is [`.nvmrc`](.nvmrc) containing `26`. Every Node-powered GitHub Actions workflow uses `actions/setup-node@v7` with `node-version-file: .nvmrc` and `check-latest: true`, so it selects the newest available **26.x** patch without manual changes.
-- The workflows use `actions/checkout@v7` and `actions/setup-python@v7` to avoid the deprecated Node.js 20 runtime in previous action versions. These actions' internal runtime is separate from the Node.js version used to execute project scripts.
-- On a development machine, run `nvm use` (or install Node.js 26 LTS) and `npm test`. The `package.json` engine range excludes prerelease Node 27.
-
-## Which browser is currently used?
-
-| Workflow | Browser / technology | Purpose | What success means |
+| Input | Firefox | Chromium | Behavior |
 | --- | --- | --- | --- |
-| [`record-confirmed.yml`](.github/workflows/record-confirmed.yml) | **Chromium + Playwright**, RoboForm Chrome Web Store extension | Manual-triggered attempt to register a real account | Only RoboForm's confirmed success screen **and exact email match** allow a verified CSV record |
-| [`register-firefox.yml`](.github/workflows/register-firefox.yml) | **Firefox + Selenium**, RoboForm Mozilla Add-ons extension | Independent real signup attempt, with a preselected Privacy checkbox that the operator can uncheck | Only RoboForm's confirmed success screen **and exact email match** allow a verified CSV record |
-| [`ci.yml`](.github/workflows/ci.yml) | **Chromium + Playwright** (plus Node tests) | Check extension signup UI and validation without submission | Passing smoke checks **does not** mean an account was created |
-| [`firefox-smoke.yml`](.github/workflows/firefox-smoke.yml) | **Firefox + Selenium**, RoboForm official Mozilla Add-ons XPI | Separate browser feasibility test; no signup, credentials, or CSV write | Firefox extension startup and onboarding status reported |
+| `email` | Optional | Optional | Blank → generate a unique 16-character hexadecimal address at `hoangnnm.tech` |
+| `full_name` | Optional | Optional | Defaults to `David Nguyen` |
+| `privacy_consent` | Required | — | Firefox Privacy consent; opting out stops before signup |
+| `ddddocr_hint` | Optional | — | Defaults to `true`; adds a read-only OCR suggestion to the Firefox review Issue |
 
-**Chromium and Firefox are separate workflows:** `record-confirmed.yml` retains the existing Chromium implementation; `register-firefox.yml` adds a Firefox-specific implementation. The `firefox-smoke.yml` check is separate and **never registers a real account**.
+The Firefox and Chromium workflows are **independent registration implementations**. Run **one browser workflow per account**, not both for the same address.
+
+## Firefox verification on GitHub
+
+After RoboForm presents an image-code challenge, the Firefox workflow:
+
+1. Captures the **isolated original PNG** while keeping the same Selenium session alive.
+2. Creates a GitHub Issue showing the registration email, whether it was generated or supplied, and the screenshot.
+3. Displays **unverified** suggestions from Tesseract and (when enabled) `ddddocr`. The Issue provides separate copyable comment examples.
+4. Accepts a manually written comment from **the account that started the workflow**. The script forwards that human-provided value to the existing browser session and waits for RoboForm's actual confirmation.
+
+Use the GitHub Issue comment box and **check capitalization against the image** before sending:
+
+```text
+/captcha ABC123
+```
+
+Replace `ABC123` with the characters **you read yourself**. The Issue's OCR suggestions are *not* guaranteed to be accurate:
+
+- Tesseract reports an aggregate confidence metric, **not** proof that the entire string is right.
+- `ddddocr` does not provide a comparable confidence value through the classification API and can confuse **uppercase and lowercase** letters.
+- The workflow does **not** automatically correct case, enter OCR predictions, or claim success from a submitted code.
+
+The Issue polling window is approximately **7 minutes (420 seconds)**. Respond before it expires; the browser session is not recoverable after its GitHub Actions job ends. Firefox's complete signup job has an overall 25-minute timeout.
+
+**Image handling:** During review, the PNG is uploaded to the temporary `captcha-review-previews` branch so GitHub can render it in the Issue. The script attempts to remove the image and close the Issue afterwards; deletion does **not** guarantee removal from Git history or caches. On registration-step failure, the workflow also uploads the **original PNG file without a ZIP archive** as an artifact, retained for **7 days**.
+
+> **Privacy:** The review Issue and temporary image are visible to anyone who can access this repository. The selected registration email is displayed in the Issue and run summary. Never post a master password or personal secrets.
+
+## Email generation and CSV records
+
+The email selector in `lib/registration-email.mjs` uses cryptographically random, lowercase hexadecimal local parts (16 characters). Before attempting signup, it checks **both CSV files**, including any `unverified` rows; on a generated-address collision, it retries (up to 64 attempts). A manually supplied address already marked verified is rejected.
+
+| File | What it stores |
+| --- | --- |
+| [`data/hoangnnm.csv`](data/hoangnnm.csv) | Confirmed registrations using `@hoangnnm.tech`, whether generated or entered manually |
+| [`data/registrations.csv`](data/registrations.csv) | Confirmed registrations using other email domains |
+
+Both files share the same header:
+
+```csv
+email,registered_at_utc,registered_date_vn,verification_method,trial_started_at_utc,trial_ends_at_utc
+```
+
+- `verification_method` identifies how signup was confirmed (for example, `firefox_signup_ui_success`).
+- `registered_date_vn` is the registration date in `Asia/Ho_Chi_Minh`.
+- `trial_started_at_utc` and `trial_ends_at_utc` are **local estimates**: the workflow assumes a 30 × 24-hour trial from the confirmed signup timestamp. It does **not** query RoboForm billing or verify entitlement. Check the real trial deadline in RoboForm.
+- Older rows whose actual trial data was never recorded retain **blank trial fields**; the workflow does not fabricate dates for them.
+
+**CSV is the source of truth.** Markdown in the Job Summary is a convenient progress/result view, not another registration database. Neither CSV is updated until the official success screen confirms the exact email.
+
+## Workflow reference
+
+| Workflow | Trigger | What it does |
+| --- | --- | --- |
+| [Firefox registration](.github/workflows/register-firefox.yml) | Manual | Official Firefox extension, Selenium, human verification Issue, verified CSV receipt |
+| [Chromium registration](.github/workflows/record-confirmed.yml) | Manual | Official Chromium extension, Playwright, verified CSV receipt; **no GitHub Issue CAPTCHA interaction** |
+| [CI](.github/workflows/ci.yml) | Push / PR | Node and Python tests plus Chromium extension smoke checks; **no real signup** |
+| [Firefox smoke](.github/workflows/firefox-smoke.yml) | PR paths / Manual | Tests extension startup without registering |
+| [ddddocr smoke](.github/workflows/ddddocr-hint-smoke.yml) | PR paths / Manual | Tests local model on synthetic, labeled text; **not a real CAPTCHA accuracy test** |
+| [Tesseract smoke](.github/workflows/tesseract-ocr-smoke.yml) | See workflow | Read-only OCR diagnostic tests |
+| [Firefox XPI audit](.github/workflows/audit-firefox-xpi.yml) | PR paths / Manual | Read-only inspection of the official add-on |
+
+### One registration job at a time
+
+Both registration workflows use the same GitHub Actions concurrency group:
+
+```yaml
+concurrency:
+  group: roboform-registration
+  cancel-in-progress: false
+```
+
+This prevents **two registration workflow runs from executing simultaneously**. It does *not* block independent CI, smoke or audit jobs. GitHub Actions permits at most one running and one pending run in a concurrency group; a new pending run can replace the previous pending run. This is **not a durable first-in-first-out queue**.
+
+## Source layout
+
+| Path | Responsibility |
+| --- | --- |
+| `scripts/register-firefox.py`, `scripts/firefox_support.py` | Firefox automation and official add-on setup |
+| `scripts/github_captcha_review.py` | GitHub Issue creation, human comment polling and preview cleanup |
+| `scripts/review_content.py` | Safe, testable Issue rendering and OCR hint comparisons |
+| `scripts/analyze-verification-image.py`, `scripts/ddddocr-hint.py` | Independent, read-only OCR diagnostics |
+| `scripts/register.mjs` | Separate Chromium/Playwright registration |
+| `scripts/select-registration-email.mjs`, `lib/registration-email.mjs` | Email selection, collision checks and workflow environment |
+| `scripts/record-firefox.mjs`, `lib/records.mjs` | Verified CSV receipts and estimated trial timestamps |
+| `test/` | Offline unit and regression tests |
+
+## Local development
+
+The project pins **Node.js 26** in [`.nvmrc`](.nvmrc) and [`package.json`](package.json). GitHub Actions sets up Python **3.12** for Firefox tooling.
+
+```bash
+nvm use
+npm install --no-audit --no-fund
+npm test
+```
+
+For offline Python unit tests, install the Python test dependency first:
+
+```bash
+python -m pip install 'selenium>=4.30,<5'
+python -m unittest discover -s test -p 'test_*.py'
+```
+
+These commands run tests; they do **not** perform real registration. Browser startup smoke tests are provided as separate Actions.
+
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| No registration email shown | Look for `REGISTRATION_SELECTED_EMAIL` in the workflow log and the **RoboForm registration attempt** Job Summary |
+| CAPTCHA Issue missing | Open the Firefox registration job log; verify the image was captured and GitHub Issue creation permissions are available |
+| OCR hints disagree | Read the original image yourself. Pay particular attention to uppercase/lowercase; neither prediction is a verified answer |
+| Manual comment not accepted | Use `/captcha CODE` as a **single comment**, from the GitHub account that initiated the run, while the job is still waiting |
+| No CSV change | No verified success screen and exact email match means no account receipt is written |
+| Verification image unavailable | The temporary preview may have been deleted; check the failed run's non-ZIP PNG artifact within its 7-day retention |
+| Generated email cannot receive messages | Configure recipient routing or catch-all for `hoangnnm.tech`; random address generation is not mailbox provisioning |
+| Trial end looks incorrect | The 30-day date is an estimate, not a value validated against RoboForm subscription data |
+
+## Operational boundaries
+
+This repository uses the **official RoboForm browser extensions** and GitHub Actions for deliberate, manually initiated signups. It does not provide an automatic CAPTCHA-solving-and-submission path, promise a successful signup, create mailboxes, or confirm trial entitlement from RoboForm. Keep usage within the service's terms and your authorization.
