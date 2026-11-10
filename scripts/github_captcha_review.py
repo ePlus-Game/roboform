@@ -86,8 +86,10 @@ class GithubCaptchaReview:
                 run=self.run,
                 attempt=self.attempt,
                 actor=self.actor,
-                email=registration_email,
-                email_source=email_source,
+                email=(registration_email if registration_email is not None
+                       else (os.getenv("REGISTRATION_EMAIL") or None)),
+                email_source=(email_source if email_source != "unknown"
+                              else os.getenv("REGISTRATION_EMAIL_SOURCE", "unknown")),
                 tesseract_hint=suggestion,
                 tesseract_confidence=confidence,
                 ddddocr_hint=ddddocr_hint,
