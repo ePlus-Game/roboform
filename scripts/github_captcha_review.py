@@ -62,17 +62,44 @@ class GithubCaptchaReview:
             raise ReviewUnavailable("GitHub API was unavailable.") from None
 
     def publish(self, image: Path, suggestion: str | None, confidence: str, *,
-                ddddocr_hint: str | None = None, ddddocr_enabled: bool = False) -> int:
+                ddddocr_hint: str | None = None, ddddocr_enabled: bool = False,
+                registration_email: str | None = None,
+                email_source: str = "unknown") -> int:
+        """Publish the image and open a human review Issue.
+
+        This class owns GitHub I/O. Text rendering and OCR formatting live in
+        review_content.py; no prediction is submitted to RoboForm.
+        """
+        from review_content import render_review
+
         raw = image.read_bytes()
         if not raw.startswith(PNG_MAGIC) or not 100 <= len(raw) <= 512000:
             raise ReviewUnavailable("Not a valid bounded PNG verification image.")
-        if suggestion and not re.fullmatch(r"[A-Za-z0-9]{1,12}", suggestion):
-            suggestion = None
-        if not re.fullmatch(r"N/A|\d{1,3}(?:\.\d{1,2})?", confidence):
-            confidence = "N/A"
 
-        ref = self.api("GET", f"git/ref/heads/{PREVIEW_BRANCH}", missing_ok=True)
-        if not ref:
+        try:
+            content = render_review(
+                image_url=(
+                    f"https://raw.githubusercontent.com/{self.repo}/"
+                    f"{PREVIEW_BRANCH}/{self.path}"
+                ),
+                run_url=f"https://github.com/{self.repo}/actions/runs/{self.run}",
+                run=self.run,
+                attempt=self.attempt,
+                actor=self.actor,
+                email=(registration_email if registration_email is not None
+                       else (os.getenv("REGISTRATION_EMAIL") or None)),
+                email_source=(email_source if email_source != "unknown"
+                              else os.getenv("REGISTRATION_EMAIL_SOURCE", "unknown")),
+                tesseract_hint=suggestion,
+                tesseract_confidence=confidence,
+                ddddocr_hint=ddddocr_hint,
+                ddddocr_enabled=ddddocr_enabled,
+            )
+        except ValueError:
+            raise ReviewUnavailable("Invalid human review metadata.") from None
+
+        existing = self.api("GET", f"git/ref/heads/{PREVIEW_BRANCH}", missing_ok=True)
+        if not existing:
             try:
                 self.api("POST", "git/refs", {
                     "ref": f"refs/heads/{PREVIEW_BRANCH}", "sha": self.commit
@@ -90,49 +117,19 @@ class GithubCaptchaReview:
         if not self.image_sha:
             raise ReviewUnavailable("Image preview upload failed.")
 
-        url = f"https://raw.githubusercontent.com/{self.repo}/{PREVIEW_BRANCH}/{self.path}"
-        run_url = f"https://github.com/{self.repo}/actions/runs/{self.run}"
-        hint = suggestion or ("OCR có phát hiện chữ nhưng kết quả bị lọc vì định dạng không hợp lệ" if confidence != "N/A" else "OCR không phát hiện được nhóm ký tự")
-        ddddocr_line = ""
-        model_hint = None
-        if ddddocr_enabled:
-            if isinstance(ddddocr_hint, str) and re.fullmatch(r"[A-Za-z0-9]{1,12}", ddddocr_hint):
-                model_hint = ddddocr_hint
-            ddddocr_line = (
-                f"**ddddocr gợi ý (CHƯA XÁC MINH):** {model_hint or 'Không có gợi ý hợp lệ'}\n\n"
-                "**Độ tin cậy ddddocr:** N/A (API nhận dạng không cung cấp)\n\n"
-            )
-        body = (
-            "## RoboForm Firefox — xác minh CAPTCHA thủ công\n\n"
-            f"![Ảnh CAPTCHA thực tế]({url})\n\n"
-            f"**OCR gợi ý (CHƯA XÁC MINH):** {hint}\n\n"
-            f"**Độ tin cậy OCR (Tesseract):** {confidence}\n\n"
-            f"{ddddocr_line}"
-            "**Tự đối chiếu ảnh; đừng mặc định tin OCR.**\n"
-            f"Chỉ người kích hoạt workflow (@{self.actor}) được phản hồi:\n\n"
-            "~~~text\n/captcha ABC123\n~~~\n\n"
-            "Thay ABC123 bằng mã tự đọc được. Không gửi mật khẩu/email.\n"
-            "Ảnh công khai tạm thời sẽ bị gỡ sau khi phiên kết thúc.\n\n"
-            f"[Xem workflow]({run_url})"
-        )
         issue = self.api("POST", "issues", {
-            "title": f"[Firefox verification] run {self.run}/{self.attempt}",
-            "body": body,
+            "title": content.title,
+            "body": content.body,
         })
         self.issue = issue.get("number")
         if not isinstance(self.issue, int):
             raise ReviewUnavailable("GitHub Issue creation failed.")
+
         issue_url = issue.get("html_url", "")
         print("FIREFOX_CAPTCHA_REVIEW_ISSUE:", issue_url)
         if path := os.getenv("GITHUB_STEP_SUMMARY"):
             with Path(path).open("a", encoding="utf-8") as out:
-                out.write(
-                    "\n### Firefox verification — manual review\n"
-                    f"- [View original image and OCR suggestion in GitHub Issue]({issue_url})\n"
-                    f"- Unverified Tesseract hint: {hint}; confidence: {confidence}\n"
-                    + (f"- Unverified ddddocr hint: {model_hint or 'no safe hint'}; confidence unavailable\n"
-                       if ddddocr_enabled else "")
-                )
+                out.write(content.summary.replace("__ISSUE_URL__", issue_url))
         return self.issue
 
     def wait_for_answer(self, seconds=420):

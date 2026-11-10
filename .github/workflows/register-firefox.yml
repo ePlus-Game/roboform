@@ -88,9 +88,10 @@ jobs:
         run: python -m pip install 'ddddocr==1.6.1'
       - name: Test source and records
         run: |
-          python -m py_compile scripts/firefox_support.py scripts/register-firefox.py scripts/analyze-verification-image.py scripts/github_captcha_review.py scripts/ddddocr-hint.py
+          python -m py_compile scripts/firefox_support.py scripts/register-firefox.py scripts/analyze-verification-image.py scripts/github_captcha_review.py scripts/review_content.py scripts/ddddocr-hint.py
           python -m unittest discover -s test -p 'test_register_firefox.py' -v
           python -m unittest discover -s test -p 'test_github_captcha_review.py' -v
+          python -m unittest discover -s test -p 'test_review_content.py' -v
           python -m unittest discover -s test -p 'test_ddddocr_hint.py' -v
           npm test
       - name: Register through official RoboForm Firefox extension

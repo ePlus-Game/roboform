@@ -6,9 +6,11 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import sys
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
 spec = importlib.util.spec_from_file_location("github_captcha_review", ROOT / "scripts" / "github_captcha_review.py")
 review_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(review_mod)
@@ -109,6 +111,50 @@ class GithubReviewTests(unittest.TestCase):
         self.assertIn("Không có gợi ý hợp lệ", bodies[1])
         self.assertNotIn("<script>", bodies[1])
         self.assertIn("/captcha ABC123", bodies[0])
+
+    def test_issue_inherits_current_registration_email_and_source(self):
+        reviewer = self.setup_reviewer()
+        bodies = []
+        titles = []
+
+        def fake_api(method, suffix, payload=None, missing_ok=False):
+            if method == "PUT":
+                return {"content": {"sha": "b" * 40}}
+            if method == "POST" and suffix == "issues":
+                bodies.append(payload["body"])
+                titles.append(payload["title"])
+                return {"number": 42, "html_url": "https://github.com/example/roboform/issues/42"}
+            return None
+
+        reviewer.api = fake_api
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp) / "isolated.png"
+            image.write_bytes(review_mod.PNG_MAGIC + b"test-png-data" * 12)
+            context = {
+                "REGISTRATION_EMAIL": "selected@hoangnnm.tech",
+                "REGISTRATION_EMAIL_SOURCE": "generated",
+            }
+            with patch.dict(os.environ, context), patch("builtins.print"):
+                reviewer.publish(image, "AbC7", "80.0",
+                                 ddddocr_hint="abc7", ddddocr_enabled=True)
+
+        self.assertIn("selected@hoangnnm.tech", titles[0])
+        self.assertIn("selected@hoangnnm.tech", bodies[0])
+        self.assertIn("Tự tạo khi bỏ trống email", bodies[0])
+        self.assertIn("/captcha AbC7", bodies[0])
+        self.assertIn("/captcha abc7", bodies[0])
+        self.assertIn("hoa/thường", bodies[0])
+
+    def test_invalid_registration_email_rejected_before_api_upload(self):
+        reviewer = self.setup_reviewer()
+        calls = []
+        reviewer.api = lambda *args, **kwargs: calls.append(args)
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp) / "isolated.png"
+            image.write_bytes(review_mod.PNG_MAGIC + b"test-png-data" * 12)
+            with self.assertRaises(review_mod.ReviewUnavailable):
+                reviewer.publish(image, "AB123", "80", registration_email="bad\nemail")
+        self.assertEqual(calls, [])
 
     def test_only_workflow_actor_can_supply_code(self):
         reviewer = self.setup_reviewer()
